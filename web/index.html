@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>801课件上传</title>
+<script>
+(function () {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    function apply() {
+        document.documentElement.setAttribute('data-bs-theme', mq.matches ? 'dark' : 'light');
+    }
+    apply();
+    if (mq.addEventListener) mq.addEventListener('change', apply);
+    else if (mq.addListener) mq.addListener(apply);
+})();
+</script>
+<link rel="stylesheet" href="/vendor/bootstrap.min.css">
+<link rel="stylesheet" href="/vendor/bootstrap-icons.min.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <i class="bi bi-cloud-arrow-up-fill"></i>
+        <span>801课件上传</span>
+        <button type="button" class="btn btn-sm qr-btn" id="btnQr" title="二维码">
+            <i class="bi bi-qr-code"></i>
+        </button>
+    </div>
+    <div class="conn-state">
+        <span>服务器连接状态</span>
+        <span class="conn-dot" id="connDot" title="未连接"></span>
+    </div>
+    <div class="topbar-right">
+        <button type="button" class="btn btn-primary btn-sm" id="btnPick">
+            <i class="bi bi-upload"></i> 上传
+        </button>
+    </div>
+</header>
+
+<ul class="nav dir-tabs" id="dirTabs"></ul>
+
+<main class="layout">
+    <aside class="sidebar">
+        <div class="tree" id="tree"></div>
+    </aside>
+    <section class="content">
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <nav class="crumbs" id="crumbs"></nav>
+                <span class="file-count" id="fileCount"></span>
+            </div>
+            <div class="toolbar-right">
+                <div class="form-check form-switch roster-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="rosterToggle">
+                    <label class="form-check-label" for="rosterToggle">预置名字</label>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnRosterEdit" title="预置名字">
+                    <i class="bi bi-people"></i>
+                </button>
+                <select class="form-select form-select-sm" id="sortSelect" title="排序">
+                    <option value="mtime">时间</option>
+                    <option value="name">名称</option>
+                    <option value="size">大小</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnNewFolder" title="新建文件夹">
+                    <i class="bi bi-folder-plus"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm refresh-btn" id="btnRefresh" title="刷新">
+                    <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
+                </button>
+            </div>
+        </div>
+        <div class="file-list" id="fileList"></div>
+        <div class="pager" id="pager"></div>
+    </section>
+</main>
+
+<section class="upload-panel" id="uploadPanel">
+    <div class="upload-head">
+        <span class="upload-head-left">
+            <span id="uploadTitle">上传队列</span>
+            <span class="upload-stats" id="uploadStats"></span>
+        </span>
+        <span class="d-flex align-items-center gap-2">
+            <span class="upload-state" id="uploadSummary"></span>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearDone" title="清除已完成">
+                <i class="bi bi-check2-all"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnFoldUploads" title="收起">
+                <i class="bi bi-chevron-up" id="foldIcon"></i>
+            </button>
+        </span>
+    </div>
+    <div class="upload-list" id="uploadList"></div>
+</section>
+
+<div class="drop-hint" id="dropHint">
+    <div>
+        <i class="bi bi-cloud-arrow-up"></i>
+        <div>松手上传</div>
+    </div>
+</div>
+
+<input type="file" id="fileInput" multiple hidden>
+
+<div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-body qr-box">
+                <img id="qrImage" alt="二维码">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="conflictModal" tabindex="-1" data-bs-backdrop="static" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="conflictTitle">文件冲突</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2 text-truncate" id="conflictName"></div>
+                <div class="modal-conflict-list text-secondary" id="conflictInfo"></div>
+                <div class="mt-3" id="conflictOptions"></div>
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="conflictRemember">
+                    <label class="form-check-label" for="conflictRemember">后续文件保持一致</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" id="conflictSkip">跳过</button>
+                <button type="button" class="btn btn-primary" id="conflictApply">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="renameModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">重命名</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="renameInput" autocomplete="off" spellcheck="false">
+                    <span class="input-group-text" id="renameExt"></span>
+                </div>
+                <div class="form-text text-danger d-none" id="renameError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="renameApply">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-truncate" id="previewTitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body preview-body" id="previewBody"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="folderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="folderTitle">新建文件夹</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" class="form-control" id="folderInput" autocomplete="off" spellcheck="false">
+                <div class="form-text text-danger d-none" id="folderError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="folderApply">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rosterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">预置名字</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <textarea class="form-control" id="rosterInput" rows="6" autocomplete="off" spellcheck="false"></textarea>
+                <div class="form-text text-danger d-none" id="rosterError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger me-auto" id="rosterClear">清除名字并关闭</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="rosterApply">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="personModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">上传到</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <div class="list-group person-list" id="personList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmTitle">确认</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <div id="confirmMessage"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmApply">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/vendor/bootstrap.bundle.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>801课件上传</title>
+<script>
+(function () {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    function apply() {
+        document.documentElement.setAttribute('data-bs-theme', mq.matches ? 'dark' : 'light');
+    }
+    apply();
+    if (mq.addEventListener) mq.addEventListener('change', apply);
+    else if (mq.addListener) mq.addListener(apply);
+})();
+</script>
+<link rel="stylesheet" href="/vendor/bootstrap.min.css">
+<link rel="stylesheet" href="/vendor/bootstrap-icons.min.css">
+<style>
+html, body { height: 100%; }
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bs-tertiary-bg);
+    -webkit-tap-highlight-color: transparent;
+}
+.login-card {
+    width: 340px;
+    max-width: calc(100vw - 32px);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 14px;
+    background: var(--bs-body-bg);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .15);
+    padding: 26px 22px 20px;
+}
+.login-icon {
+    font-size: 34px;
+    color: var(--bs-primary);
+}
+</style>
+</head>
+<body>
+<form class="login-card" id="loginForm">
+    <div class="text-center mb-3">
+        <i class="bi bi-cloud-arrow-up-fill login-icon"></i>
+    </div>
+    <div class="mb-3">
+        <input type="password" class="form-control" id="password" placeholder="访问密码" autocomplete="current-password" autofocus>
+        <div class="form-text text-danger d-none" id="loginError">密码错误</div>
+    </div>
+    <button type="submit" class="btn btn-primary w-100" id="loginButton">登录</button>
+</form>
+<script>
+(function () {
+    var form = document.getElementById('loginForm');
+    var input = document.getElementById('password');
+    var error = document.getElementById('loginError');
+    var button = document.getElementById('loginButton');
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!input.value) return;
+        error.classList.add('d-none');
+        button.disabled = true;
+        fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: input.value })
+        }).then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (data) {
+                if (res.ok) {
+                    location.replace('/');
+                    return;
+                }
+                error.textContent = data.error || '登录失败';
+                error.classList.remove('d-none');
+                input.select();
+            });
+        }).catch(function () {
+            error.textContent = '连接失败';
+            error.classList.remove('d-none');
+        }).then(function () {
+            button.disabled = false;
+        });
+    });
+})();
+</script>
+</body>
+</html>

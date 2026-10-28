@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{5C45E8CF-FC59-42E5-9DE6-2DABF866BCD5}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>_801CoursewareUploader</RootNamespace>
+    <AssemblyName>801CoursewareUploader</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="Microsoft.VisualBasic" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="src\AppPaths.cs" />
+    <Compile Include="src\ConfigStore.cs" />
+    <Compile Include="src\Draw.cs" />
+    <Compile Include="src\FileCatalog.cs" />
+    <Compile Include="src\Hashing.cs" />
+    <Compile Include="src\LanSetup.cs" />
+    <Compile Include="src\MainForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="src\Models.cs" />
+    <Compile Include="src\Native.cs" />
+    <Compile Include="src\QrCode.cs" />
+    <Compile Include="src\Theme.cs" />
+    <Compile Include="src\UploadManager.cs" />
+    <Compile Include="src\WebAuth.cs" />
+    <Compile Include="src\WebServer.cs" />
+    <Compile Include="src\Controls\CardListPanel.cs" />
+    <Compile Include="src\Controls\DirectoryCard.cs" />
+    <Compile Include="src\Controls\FluentButton.cs" />
+    <Compile Include="src\Controls\FluentTextBox.cs" />
+    <Compile Include="src\Dialogs\FlatDialog.cs" />
+    <Compile Include="src\Dialogs\MessageDialog.cs" />
+    <Compile Include="src\Dialogs\QrDialog.cs" />
+    <Compile Include="src\Dialogs\SettingsDialog.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="web\index.html">
+      <LogicalName>web/index.html</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\login.html">
+      <LogicalName>web/login.html</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\app.js">
+      <LogicalName>web/app.js</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\style.css">
+      <LogicalName>web/style.css</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\sha256-worker.js">
+      <LogicalName>web/sha256-worker.js</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\vendor\bootstrap.min.css">
+      <LogicalName>web/vendor/bootstrap.min.css</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\vendor\bootstrap.bundle.min.js">
+      <LogicalName>web/vendor/bootstrap.bundle.min.js</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\vendor\bootstrap-icons.min.css">
+      <LogicalName>web/vendor/bootstrap-icons.min.css</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\vendor\fonts\bootstrap-icons.woff2">
+      <LogicalName>web/vendor/fonts/bootstrap-icons.woff2</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\vendor\fonts\bootstrap-icons.woff">
+      <LogicalName>web/vendor/fonts/bootstrap-icons.woff</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+    <None Include="app.manifest" />
+    <None Include="app.ico" />
+    <EmbeddedResource Include="app.ico">
+      <LogicalName>app.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
