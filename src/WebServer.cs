@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -20,6 +21,26 @@ namespace _801CoursewareUploader
         private readonly JavaScriptSerializer json = new JavaScriptSerializer();
         private readonly Dictionary<string, byte[]> assetCache =
             new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
+        private sealed class FolderPackage
+        {
+            public string Token;
+            public string Source;
+            public string Name;
+            public string TempPath;
+            public string State;
+            public long Size;
+            public long Total;
+            public long Done;
+            public int Skipped;
+            public string Error;
+            public DateTime Created;
+            public volatile bool Cancelled;
+        }
+
+        private readonly Dictionary<string, FolderPackage> packages =
+            new Dictionary<string, FolderPackage>(StringComparer.Ordinal);
+        private readonly object packagesLock = new object();
 
         private HttpListener listener;
         private Thread listenThread;
@@ -41,6 +62,7 @@ namespace _801CoursewareUploader
         public bool Start(int port)
         {
             Stop();
+            CleanTempZips();
             Port = port;
             LastError = null;
 
@@ -87,6 +109,7 @@ namespace _801CoursewareUploader
                 try { current.Close(); } catch { }
             }
             listenThread = null;
+            ClearPackages();
         }
 
         private void ListenLoop()
@@ -263,6 +286,26 @@ namespace _801CoursewareUploader
                 HandleOpen(context);
                 return;
             }
+            if (string.Equals(path, "/api/folder/prepare", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            {
+                HandleFolderPrepare(context);
+                return;
+            }
+            if (string.Equals(path, "/api/folder/status", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            {
+                HandleFolderStatus(context);
+                return;
+            }
+            if (string.Equals(path, "/api/folder/cancel", StringComparison.OrdinalIgnoreCase) && method == "POST")
+            {
+                HandleFolderCancel(context);
+                return;
+            }
+            if (string.Equals(path, "/api/folder/download", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            {
+                HandleFolderDownload(context);
+                return;
+            }
             if (string.Equals(path, "/api/folder/create", StringComparison.OrdinalIgnoreCase) && method == "POST")
             {
                 HandleCreateFolder(context);
@@ -349,7 +392,8 @@ namespace _801CoursewareUploader
                 concurrent = ConfigStore.Instance.Read(delegate(AppConfig c) { return c.MaxConcurrent; }),
                 lan = LanMode,
                 port = Port,
-                address = SiteAddress()
+                address = SiteAddress(),
+                disks = DiskSpace(entries)
             });
         }
 
@@ -357,6 +401,45 @@ namespace _801CoursewareUploader
         {
             return LanMode ? LanSetup.GetLanAddress(Port)
                 : "http://localhost:" + Port.ToString() + "/";
+        }
+
+        private static List<object> DiskSpace(List<FileCatalog.DirView> entries)
+        {
+            List<object> result = new List<object>();
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                try
+                {
+                    string root = Path.GetPathRoot(Path.GetFullPath(entries[i].Path));
+                    if (string.IsNullOrEmpty(root) || seen.Contains(root)) continue;
+                    long free;
+                    try { free = new DriveInfo(root).AvailableFreeSpace; }
+                    catch { continue; }
+                    seen.Add(root);
+                    string trimmed = root.TrimEnd('\\', '/');
+                    string name = trimmed.Length == 2 && trimmed[1] == ':'
+                        ? trimmed.Substring(0, 1).ToUpperInvariant() + "盘"
+                        : trimmed;
+                    result.Add(new { name = name, free = free });
+                }
+                catch { }
+            }
+            return result;
+        }
+
+        private static long FreeDiskSpace(string path)
+        {
+            try
+            {
+                string root = Path.GetPathRoot(Path.GetFullPath(path));
+                if (string.IsNullOrEmpty(root)) return 0;
+                return new DriveInfo(root).AvailableFreeSpace;
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         private void HandleQrCode(HttpListenerContext context)
@@ -437,6 +520,20 @@ namespace _801CoursewareUploader
             bool desc = !string.Equals(order, "asc", StringComparison.OrdinalIgnoreCase);
 
             int total;
+            string normalizedFolder = FileCatalog.NormalizeRel(folder);
+            List<FileCatalog.FolderView> folders = catalog.ListChildFolders(dirId, normalizedFolder);
+            List<object> folderItems = new List<object>();
+            for (int i = 0; i < folders.Count; i++)
+            {
+                FileCatalog.FolderView sub = folders[i];
+                folderItems.Add(new
+                {
+                    name = sub.Name,
+                    path = sub.RelPath,
+                    mtime = sub.Modified == DateTime.MinValue
+                        ? "" : sub.Modified.ToString("yyyy-MM-dd HH:mm:ss")
+                });
+            }
             List<FileCatalog.FileView> files =
                 catalog.ListFolder(dirId, folder, page, size, sort, desc, out total);
             List<object> items = new List<object>();
@@ -459,6 +556,7 @@ namespace _801CoursewareUploader
                 total = total,
                 page = page,
                 size = size,
+                folders = folderItems,
                 files = items
             });
         }
@@ -518,6 +616,7 @@ namespace _801CoursewareUploader
                     {
                         name = view.Name,
                         count = view.Count,
+                        folders = view.FolderCount,
                         bytes = view.Bytes,
                         mtime = view.Modified == DateTime.MinValue
                             ? "" : view.Modified.ToString("yyyy-MM-dd HH:mm:ss")
@@ -764,6 +863,358 @@ namespace _801CoursewareUploader
             }
             uploads.UpdateDirProgress(request.Dirs);
             WriteJson(context, 200, new { ok = true });
+        }
+
+        private void HandleFolderPrepare(HttpListenerContext context)
+        {
+            string dirId = Query(context, "dirId");
+            string rel = Query(context, "path");
+            string full;
+            if (!catalog.TryResolve(dirId, rel, out full) || !Directory.Exists(full))
+            {
+                WriteJson(context, 404, new { error = "文件夹不存在" });
+                return;
+            }
+
+            string name = Path.GetFileName(full.TrimEnd('\\', '/'));
+            if (string.IsNullOrEmpty(name)) name = "root";
+            string source = Path.GetFullPath(full.TrimEnd('\\', '/'));
+
+            ClearExpiredPackages();
+            string existing = null;
+            string existingName = null;
+            lock (packagesLock)
+            {
+                foreach (KeyValuePair<string, FolderPackage> pair in packages)
+                {
+                    if (string.Equals(pair.Value.Source, source, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(pair.Value.State, "error", StringComparison.Ordinal) &&
+                        !string.Equals(pair.Value.State, "canceled", StringComparison.Ordinal))
+                    {
+                        existing = pair.Key;
+                        existingName = pair.Value.Name;
+                        break;
+                    }
+                }
+            }
+            if (existing != null)
+            {
+                WriteJson(context, 200, new { token = existing, name = existingName });
+                return;
+            }
+
+            string token = Guid.NewGuid().ToString("N");
+            FolderPackage item = new FolderPackage
+            {
+                Token = token,
+                Source = source,
+                Name = name,
+                State = "preparing",
+                Created = DateTime.UtcNow
+            };
+            lock (packagesLock) packages[token] = item;
+
+            ThreadPool.QueueUserWorkItem(delegate(object state)
+            {
+                string temp = Path.Combine(AppPaths.TmpDir, token + ".zip");
+                try
+                {
+                    Directory.CreateDirectory(AppPaths.TmpDir);
+                    List<string> files = new List<string>();
+                    long total = 0;
+                    CollectFiles(source, files, ref total);
+                    lock (packagesLock) item.Total = total;
+                    long free = FreeDiskSpace(AppPaths.TmpDir); // 打包临时文件写在程序目录所在磁盘
+                    if (free > 0 && total > free)
+                    {
+                        lock (packagesLock)
+                        {
+                            item.State = "error";
+                            item.Error = "磁盘空间不足，无法打包下载";
+                        }
+                        return;
+                    }
+                    int skipped = BuildZip(source, files, temp, item);
+                    FileInfo info = new FileInfo(temp);
+                    bool discard = false;
+                    lock (packagesLock)
+                    {
+                        if (!running || item.Cancelled)
+                        {
+                            item.State = "canceled";
+                            packages.Remove(token);
+                            discard = true;
+                        }
+                        else
+                        {
+                            item.TempPath = temp;
+                            item.Size = info.Length;
+                            item.Skipped = skipped;
+                            item.State = "ready";
+                        }
+                    }
+                    if (discard)
+                    {
+                        try { File.Delete(temp); } catch { }
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    try { File.Delete(temp); } catch { }
+                    lock (packagesLock)
+                    {
+                        if (!item.Cancelled)
+                        {
+                            item.State = "error";
+                            item.Error = "打包失败：" + ex.Message;
+                        }
+                    }
+                }
+            }, null);
+
+            WriteJson(context, 200, new { token = token, name = name });
+        }
+
+        private void HandleFolderStatus(HttpListenerContext context)
+        {
+            string token = Query(context, "token");
+            FolderPackage item = null;
+            lock (packagesLock)
+            {
+                if (!string.IsNullOrEmpty(token)) packages.TryGetValue(token, out item);
+            }
+            if (item == null)
+            {
+                WriteJson(context, 404, new { error = "打包任务不存在" });
+                return;
+            }
+            string state;
+            long size;
+            long total;
+            long done;
+            int skipped;
+            string name;
+            string error;
+            lock (packagesLock)
+            {
+                state = item.State;
+                size = item.Size;
+                total = item.Total;
+                done = item.Done;
+                skipped = item.Skipped;
+                name = item.Name;
+                error = item.Error;
+            }
+            WriteJson(context, 200, new
+            {
+                state = state,
+                size = size,
+                total = total,
+                done = done,
+                skipped = skipped,
+                name = name,
+                error = error
+            });
+        }
+
+        private void HandleFolderCancel(HttpListenerContext context)
+        {
+            IdRequest request = ParseJson<IdRequest>(context.Request);
+            if (request == null || string.IsNullOrEmpty(request.Id))
+            {
+                WriteJson(context, 400, new { error = "请求无效" });
+                return;
+            }
+
+            bool found = false;
+            string temp = null;
+            lock (packagesLock)
+            {
+                FolderPackage item;
+                if (packages.TryGetValue(request.Id, out item))
+                {
+                    found = true;
+                    item.Cancelled = true;
+                    if (string.Equals(item.State, "ready", StringComparison.Ordinal))
+                    {
+                        temp = item.TempPath;
+                        item.State = "canceled";
+                        packages.Remove(request.Id);
+                    }
+                }
+            }
+            if (!string.IsNullOrEmpty(temp))
+            {
+                try { File.Delete(temp); } catch { }
+            }
+            WriteJson(context, 200, new { ok = found });
+        }
+
+        private void HandleFolderDownload(HttpListenerContext context)
+        {
+            string token = Query(context, "token");
+            FolderPackage item = null;
+            lock (packagesLock)
+            {
+                if (!string.IsNullOrEmpty(token) && packages.TryGetValue(token, out item) &&
+                    item.State == "ready")
+                {
+                    packages.Remove(token);
+                }
+                else
+                {
+                    item = null;
+                }
+            }
+            if (item == null)
+            {
+                WriteJson(context, 404, new { error = "打包任务不存在" });
+                return;
+            }
+
+            string temp = item.TempPath;
+            try
+            {
+                string fileName = item.Name + ".zip";
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "application/zip";
+                context.Response.AddHeader("Content-Disposition",
+                    "attachment; filename=\"" + SanitizeAscii(fileName) + "\"; filename*=UTF-8''" +
+                    Uri.EscapeDataString(fileName));
+                context.Response.ContentLength64 = item.Size;
+                using (FileStream stream = new FileStream(temp, FileMode.Open, FileAccess.Read,
+                    FileShare.Read, 128 * 1024, FileOptions.SequentialScan))
+                {
+                    byte[] buffer = new byte[128 * 1024];
+                    int read;
+                    while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                        context.Response.OutputStream.Write(buffer, 0, read);
+                }
+            }
+            finally
+            {
+                try { File.Delete(temp); } catch { }
+            }
+        }
+
+        private static void CollectFiles(string dir, List<string> files, ref long total)
+        {
+            try
+            {
+                string[] subs = Directory.GetDirectories(dir);
+                for (int i = 0; i < subs.Length; i++) CollectFiles(subs[i], files, ref total);
+            }
+            catch { }
+
+            string[] names;
+            try { names = Directory.GetFiles(dir); }
+            catch { return; }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                files.Add(names[i]);
+                try { total += new FileInfo(names[i]).Length; } catch { }
+            }
+        }
+
+        private int BuildZip(string source, List<string> files, string temp, FolderPackage item)
+        {
+            int skipped = 0;
+            using (FileStream file = new FileStream(temp, FileMode.CreateNew, FileAccess.Write,
+                FileShare.None, 128 * 1024))
+            using (ZipArchive archive = new ZipArchive(file, ZipArchiveMode.Create))
+            {
+                byte[] buffer = new byte[128 * 1024];
+                for (int i = 0; i < files.Count; i++)
+                {
+                    if (item.Cancelled) break;
+                    string path = files[i];
+                    string entryName = path.Substring(source.Length).TrimStart('\\', '/')
+                        .Replace('\\', '/');
+                    try
+                    {
+                        using (FileStream input = new FileStream(path, FileMode.Open,
+                            FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
+                            128 * 1024, FileOptions.SequentialScan))
+                        {
+                            ZipArchiveEntry entry = archive.CreateEntry(entryName,
+                                CompressionLevel.Fastest);
+                            using (Stream output = entry.Open())
+                            {
+                                int read;
+                                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                                {
+                                    if (item.Cancelled) break;
+                                    output.Write(buffer, 0, read);
+                                    lock (packagesLock) item.Done += read;
+                                }
+                            }
+                        }
+                    }
+                    catch { skipped++; }
+                }
+            }
+            return skipped;
+        }
+
+        private void ClearExpiredPackages()
+        {
+            List<FolderPackage> stale = new List<FolderPackage>();
+            lock (packagesLock)
+            {
+                List<string> keys = new List<string>();
+                foreach (KeyValuePair<string, FolderPackage> pair in packages)
+                {
+                    if (DateTime.UtcNow - pair.Value.Created > TimeSpan.FromMinutes(30))
+                        keys.Add(pair.Key);
+                }
+                for (int i = 0; i < keys.Count; i++)
+                {
+                    stale.Add(packages[keys[i]]);
+                    packages.Remove(keys[i]);
+                }
+            }
+            for (int i = 0; i < stale.Count; i++)
+            {
+                string path = stale[i].TempPath;
+                if (!string.IsNullOrEmpty(path))
+                {
+                    try { File.Delete(path); } catch { }
+                }
+            }
+        }
+
+        private static void CleanTempZips()
+        {
+            try
+            {
+                if (!Directory.Exists(AppPaths.TmpDir)) return;
+                string[] files = Directory.GetFiles(AppPaths.TmpDir, "*.zip");
+                for (int i = 0; i < files.Length; i++)
+                {
+                    try { File.Delete(files[i]); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        private void ClearPackages()
+        {
+            List<FolderPackage> all = new List<FolderPackage>();
+            lock (packagesLock)
+            {
+                foreach (FolderPackage item in packages.Values) all.Add(item);
+                packages.Clear();
+            }
+            for (int i = 0; i < all.Count; i++)
+            {
+                string path = all[i].TempPath;
+                if (!string.IsNullOrEmpty(path))
+                {
+                    try { File.Delete(path); } catch { }
+                }
+            }
         }
 
         private void HandleFile(HttpListenerContext context)
@@ -1122,6 +1573,8 @@ namespace _801CoursewareUploader
                 resource = "web/vendor/bootstrap.bundle.min.js";
             else if (string.Equals(path, "/vendor/bootstrap-icons.min.css", StringComparison.OrdinalIgnoreCase))
                 resource = "web/vendor/bootstrap-icons.min.css";
+            else if (string.Equals(path, "/vendor/html2canvas.min.js", StringComparison.OrdinalIgnoreCase))
+                resource = "web/vendor/html2canvas.min.js";
             else if (string.Equals(path, "/vendor/fonts/bootstrap-icons.woff2", StringComparison.OrdinalIgnoreCase))
                 resource = "web/vendor/fonts/bootstrap-icons.woff2";
             else if (string.Equals(path, "/vendor/fonts/bootstrap-icons.woff", StringComparison.OrdinalIgnoreCase))

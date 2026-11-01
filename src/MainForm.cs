@@ -17,15 +17,22 @@ namespace _801CoursewareUploader
 
         private readonly FluentButton addButton;
         private readonly FluentButton settingsButton;
+        private readonly FluentButton copyButton;
+        private readonly FluentButton refreshButton;
         private readonly FluentButton qrButton;
         private readonly CardListPanel listPanel;
+        private readonly ToastBar toast;
         private readonly Dictionary<string, DirectoryCard> cards =
             new Dictionary<string, DirectoryCard>(StringComparer.OrdinalIgnoreCase);
         private readonly Timer timer;
+        private readonly Timer toastTimer;
+        private readonly Timer copyFlashTimer;
+        private readonly Timer refreshFlashTimer;
         private readonly NotifyIcon tray;
         private readonly Icon trayIcon;
 
         private Rectangle percentRect;
+        private Rectangle addressLabelRect;
         private Rectangle addressRect;
         private string addressText = "";
         private bool serverOk;
@@ -66,6 +73,38 @@ namespace _801CoursewareUploader
             settingsButton.Click += delegate { OpenSettings(); };
             Controls.Add(settingsButton);
 
+            copyButton = new FluentButton();
+            copyButton.Icon = FluentButton.Glyph.Copy;
+            copyButton.Style = FluentButton.Variant.Secondary;
+            copyButton.Enabled = serverOk;
+            copyButton.Click += delegate { CopyAddress(); };
+            Controls.Add(copyButton);
+
+            copyFlashTimer = new Timer();
+            copyFlashTimer.Interval = 1200;
+            copyFlashTimer.Tick += delegate
+            {
+                copyFlashTimer.Stop();
+                copyButton.Icon = FluentButton.Glyph.Copy;
+                copyButton.Style = FluentButton.Variant.Secondary;
+            };
+
+            refreshButton = new FluentButton();
+            refreshButton.Icon = FluentButton.Glyph.Refresh;
+            refreshButton.Style = FluentButton.Variant.Secondary;
+            refreshButton.Enabled = serverOk;
+            refreshButton.Click += delegate { RefreshAddress(); };
+            Controls.Add(refreshButton);
+
+            refreshFlashTimer = new Timer();
+            refreshFlashTimer.Interval = 1200;
+            refreshFlashTimer.Tick += delegate
+            {
+                refreshFlashTimer.Stop();
+                refreshButton.Icon = FluentButton.Glyph.Refresh;
+                refreshButton.Style = FluentButton.Variant.Secondary;
+            };
+
             qrButton = new FluentButton();
             qrButton.Icon = FluentButton.Glyph.Qr;
             qrButton.Style = FluentButton.Variant.Secondary;
@@ -75,7 +114,19 @@ namespace _801CoursewareUploader
 
             listPanel = new CardListPanel();
             listPanel.Resize += delegate { LayoutCards(); };
+            listPanel.Layout += delegate { LayoutCards(); };
             Controls.Add(listPanel);
+
+            toast = new ToastBar();
+            Controls.Add(toast);
+
+            toastTimer = new Timer();
+            toastTimer.Interval = 1600;
+            toastTimer.Tick += delegate
+            {
+                toastTimer.Stop();
+                toast.Visible = false;
+            };
 
             timer = new Timer();
             timer.Interval = 400;
@@ -99,6 +150,20 @@ namespace _801CoursewareUploader
             trayMenu.MenuItems.Add(new MenuItem("-"));
             trayMenu.MenuItems.Add(exitItem);
             tray.ContextMenu = trayMenu;
+        }
+
+        private void ShowToast(string text)
+        {
+            Size size = TextRenderer.MeasureText(text, Theme.FontBody);
+            int height = Draw.Scale(this, 34);
+            int width = size.Width + Draw.Scale(this, 36);
+            toast.SetMessage(text);
+            toast.Bounds = new Rectangle((ClientSize.Width - width) / 2,
+                ClientSize.Height - Draw.Scale(this, 28) - height, width, height);
+            toast.Visible = true;
+            toast.BringToFront();
+            toastTimer.Stop();
+            toastTimer.Start();
         }
 
         private void ShowMainWindow()
@@ -161,7 +226,8 @@ namespace _801CoursewareUploader
         {
             base.OnLayout(e);
 
-            if (addButton == null || settingsButton == null || qrButton == null || listPanel == null) return;
+            if (addButton == null || settingsButton == null || copyButton == null ||
+                refreshButton == null || qrButton == null || listPanel == null) return;
 
             int padX = Draw.Scale(this, 20);
             int top = Draw.Scale(this, 12);
@@ -176,14 +242,24 @@ namespace _801CoursewareUploader
 
             int qrSize = Draw.Scale(this, 24);
             int qrGap = Draw.Scale(this, 6);
+            int labelWidth = TextRenderer.MeasureText("上传地址：", Theme.FontSmall,
+                new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Width;
+            int labelGap = Draw.Scale(this, 2);
             int addressWidth = TextRenderer.MeasureText(addressText, Theme.FontSmall).Width +
                 Draw.Scale(this, 4);
-            int addressLimit = ClientSize.Width - padX * 2 - qrSize - qrGap;
+            int addressLimit = ClientSize.Width - padX * 2 - qrSize * 3 - qrGap * 3 -
+                labelWidth - labelGap;
             if (addressWidth > addressLimit) addressWidth = addressLimit;
             if (addressWidth < 0) addressWidth = 0;
-            addressRect = new Rectangle(padX, Draw.Scale(this, 42),
-                addressWidth, Draw.Scale(this, 22));
-            qrButton.Bounds = new Rectangle(addressRect.Right + qrGap,
+            addressLabelRect = new Rectangle(padX, Draw.Scale(this, 42),
+                labelWidth, Draw.Scale(this, 22));
+            addressRect = new Rectangle(addressLabelRect.Right + labelGap,
+                Draw.Scale(this, 42), addressWidth, Draw.Scale(this, 22));
+            copyButton.Bounds = new Rectangle(addressRect.Right + qrGap,
+                Draw.Scale(this, 41), qrSize, qrSize);
+            refreshButton.Bounds = new Rectangle(copyButton.Right + qrGap,
+                Draw.Scale(this, 41), qrSize, qrSize);
+            qrButton.Bounds = new Rectangle(refreshButton.Right + qrGap,
                 Draw.Scale(this, 41), qrSize, qrSize);
 
             int titleWidth = TextRenderer.MeasureText(Text, Theme.FontPageTitle).Width;
@@ -195,6 +271,11 @@ namespace _801CoursewareUploader
             listPanel.Bounds = new Rectangle(padX, listTop,
                 Math.Max(0, ClientSize.Width - padX * 2),
                 Math.Max(0, listBottom - listTop));
+            if (toast != null && toast.Visible)
+            {
+                toast.Left = (ClientSize.Width - toast.Width) / 2;
+                toast.Top = ClientSize.Height - Draw.Scale(this, 28) - toast.Height;
+            }
             LayoutCards();
         }
 
@@ -202,11 +283,14 @@ namespace _801CoursewareUploader
         {
             if (listPanel == null) return;
             int width = listPanel.ClientSize.Width - Draw.Scale(this, 2);
+            if (listPanel.VerticalScroll.Visible)
+                width -= SystemInformation.VerticalScrollBarWidth;
             int minimum = Draw.Scale(this, 320);
             if (width < minimum) width = minimum;
             int height = Draw.Scale(this, 72);
             foreach (DirectoryCard card in cards.Values)
             {
+                if (card.Width == width && card.Height == height) continue;
                 card.Width = width;
                 card.Height = height;
             }
@@ -252,6 +336,40 @@ namespace _801CoursewareUploader
             }
         }
 
+        private void CopyAddress()
+        {
+            if (!serverOk) return;
+            try
+            {
+                Clipboard.SetText(addressText);
+            }
+            catch
+            {
+                return;
+            }
+
+            copyButton.Icon = FluentButton.Glyph.Check;
+            copyButton.Style = FluentButton.Variant.Primary;
+            copyFlashTimer.Stop();
+            copyFlashTimer.Start();
+        }
+
+        private void RefreshAddress()
+        {
+            if (!serverOk) return;
+            int port = server.Port;
+            addressText = server.LanMode
+                ? LanSetup.GetLanAddress(port)
+                : "http://localhost:" + port.ToString() + "/";
+            PerformLayout();
+            Invalidate();
+
+            refreshButton.Icon = FluentButton.Glyph.Check;
+            refreshButton.Style = FluentButton.Variant.Primary;
+            refreshFlashTimer.Stop();
+            refreshFlashTimer.Start();
+        }
+
         private void ShowQrCode()
         {
             if (!serverOk) return;
@@ -281,6 +399,10 @@ namespace _801CoursewareUploader
                     Theme.Accent, TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
                     TextFormatFlags.NoPrefix);
             }
+
+            TextRenderer.DrawText(g, "上传地址：", Theme.FontSmall, addressLabelRect,
+                Theme.TextMuted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.NoPrefix);
 
             TextRenderer.DrawText(g, addressText, Theme.FontSmall, addressRect,
                 serverOk ? (addressHover ? Theme.Accent : Theme.TextMuted) : Theme.Danger,
@@ -425,9 +547,11 @@ namespace _801CoursewareUploader
             try
             {
                 Clipboard.SetText(card.DirectoryPath);
+                ShowToast("已复制路径");
             }
             catch
             {
+                ShowToast("复制失败");
             }
         }
 
@@ -436,6 +560,7 @@ namespace _801CoursewareUploader
             DirectoryCard card = sender as DirectoryCard;
             if (card == null) return;
             catalog.Reindex(card.DirectoryId);
+            ShowToast("已开始重新索引");
         }
 
         private void CardRemoveClicked(object sender, EventArgs e)
@@ -445,6 +570,7 @@ namespace _801CoursewareUploader
             if (!MessageDialog.Confirm(this, "移除目录", card.DirectoryPath, "移除", true)) return;
             catalog.RemoveDirectory(card.DirectoryId, false);
             RebuildCards();
+            ShowToast("已移除目录");
         }
 
         private void AddDirectory()
@@ -462,13 +588,16 @@ namespace _801CoursewareUploader
                     return;
                 }
                 RebuildCards();
+                ShowToast("已添加目录");
             }
         }
 
         private void OpenSettings()
         {
             using (SettingsDialog dialog = new SettingsDialog(catalog, auth, uploads))
-                dialog.ShowDialog(this);
+            {
+                if (dialog.ShowDialog(this) == DialogResult.OK) ShowToast("设置已保存");
+            }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -490,6 +619,9 @@ namespace _801CoursewareUploader
                 closingConfirmed = true;
             }
             timer.Stop();
+            toastTimer.Stop();
+            copyFlashTimer.Stop();
+            refreshFlashTimer.Stop();
             server.Stop();
             tray.Visible = false;
             tray.Dispose();

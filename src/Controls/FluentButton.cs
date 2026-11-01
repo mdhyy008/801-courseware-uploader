@@ -18,7 +18,10 @@ namespace _801CoursewareUploader
         public enum Glyph
         {
             None,
-            Qr
+            Qr,
+            Check,
+            Copy,
+            Refresh
         }
 
         private Variant variant = Variant.Secondary;
@@ -176,17 +179,71 @@ namespace _801CoursewareUploader
             if (Focused)
                 Draw.StrokeRound(g, Theme.Accent, Rectangle.Inflate(r, -1, -1), radius, 1.5f);
 
-            if (icon == Glyph.Qr)
+            if (icon != Glyph.None)
             {
                 int size = Draw.Scale(this, 14);
-                DrawQr(g, new Rectangle(r.X + (r.Width - size) / 2,
-                    r.Y + (r.Height - size) / 2, size, size), fore);
+                Rectangle box = new Rectangle(r.X + (r.Width - size) / 2,
+                    r.Y + (r.Height - size) / 2, size, size);
+                if (icon == Glyph.Qr) DrawQr(g, box, fore);
+                else if (icon == Glyph.Copy) DrawCopy(g, box, fore);
+                else if (icon == Glyph.Refresh) DrawRefresh(g, box, fore);
+                else Draw.CheckMark(g, box, fore);
                 return;
             }
 
             TextRenderer.DrawText(g, Text, Font, r, fore,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
                 TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+
+        private static void DrawRefresh(Graphics g, Rectangle box, Color color)
+        {
+            float size = box.Width;
+            float thickness = Math.Max(1.4f, size * 0.09f);
+            float cx = box.Left + size / 2f;
+            float cy = box.Top + size / 2f;
+            float r = size / 2f - thickness;
+            using (Pen pen = new Pen(color, thickness))
+            {
+                pen.StartCap = LineCap.Round;
+                pen.EndCap = LineCap.Round;
+                pen.LineJoin = LineJoin.Round;
+                g.DrawArc(pen, cx - r, cy - r, r * 2, r * 2, 30f, 300f);
+
+                double end = 330d * Math.PI / 180d;
+                float px = cx + (float)(r * Math.Cos(end));
+                float py = cy + (float)(r * Math.Sin(end));
+                float dirX = (float)-Math.Sin(end);
+                float dirY = (float)Math.Cos(end);
+                float len = size * 0.26f;
+                float perpX = -dirY * len * 0.62f;
+                float perpY = dirX * len * 0.62f;
+                g.DrawLine(pen, px, py, px - dirX * len + perpX, py - dirY * len + perpY);
+                g.DrawLine(pen, px, py, px - dirX * len - perpX, py - dirY * len - perpY);
+            }
+        }
+
+        private static void DrawCopy(Graphics g, Rectangle box, Color color)
+        {
+            int size = box.Width;
+            int off = Math.Max(2, size / 4);
+            int side = size - off;
+            int radius = Math.Max(2, size / 5);
+            float thickness = Math.Max(1.2f, size * 0.08f);
+            Draw.StrokeRound(g, color, new Rectangle(box.Left, box.Top + off, side, side),
+                radius, thickness);
+            using (Pen pen = new Pen(color, thickness))
+            {
+                pen.StartCap = LineCap.Round;
+                pen.EndCap = LineCap.Round;
+                pen.LineJoin = LineJoin.Round;
+                g.DrawLines(pen, new PointF[]
+                {
+                    new PointF(box.Left + off, box.Top),
+                    new PointF(box.Right, box.Top),
+                    new PointF(box.Right, box.Bottom - off)
+                });
+            }
         }
 
         private static void DrawQr(Graphics g, Rectangle box, Color color)

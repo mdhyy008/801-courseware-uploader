@@ -41,6 +41,8 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Windows.Forms" />
@@ -69,6 +71,8 @@
     <Compile Include="src\Controls\DirectoryCard.cs" />
     <Compile Include="src\Controls\FluentButton.cs" />
     <Compile Include="src\Controls\FluentTextBox.cs" />
+    <Compile Include="src\Controls\FluentToggle.cs" />
+    <Compile Include="src\Controls\ToastBar.cs" />
     <Compile Include="src\Dialogs\FlatDialog.cs" />
     <Compile Include="src\Dialogs\MessageDialog.cs" />
     <Compile Include="src\Dialogs\QrDialog.cs" />
@@ -117,6 +121,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="web\vendor\bootstrap-icons.min.css">
       <LogicalName>web/vendor/bootstrap-icons.min.css</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="web\vendor\html2canvas.min.js">
+      <LogicalName>web/vendor/html2canvas.min.js</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="web\vendor\fonts\bootstrap-icons.woff2">
       <LogicalName>web/vendor/fonts/bootstrap-icons.woff2</LogicalName>

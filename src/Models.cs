@@ -36,6 +36,7 @@ namespace _801CoursewareUploader
         public string PasswordSalt { get; set; }
         public string PasswordHash { get; set; }
         public int MaxConcurrent { get; set; }
+        public bool ShowHiddenFiles { get; set; }
         public List<string> Whitelist { get; set; }
         public List<DirectoryEntry> Directories { get; set; }
         public List<RosterEntry> Rosters { get; set; }

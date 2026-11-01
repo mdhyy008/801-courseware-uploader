@@ -155,11 +155,42 @@
     }
 
     function heartbeat() {
-        fetch('/api/status', { cache: 'no-store' }).then(function () {
+        fetch('/api/status', { cache: 'no-store' }).then(function (response) {
             markConnection(true);
+            return response.json();
+        }).then(function (data) {
+            if (data) updateDisks(data.disks);
         }).catch(function () {
             markConnection(false);
         });
+    }
+
+    function sizeText(bytes) {
+        if (bytes >= 1024 * 1024 * 1024) {
+            return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+        }
+        return Math.round(bytes / (1024 * 1024)) + ' MB';
+    }
+
+    var diskCache = [];
+
+    function updateDisks(disks) {
+        diskCache = disks || [];
+        var button = $('btnDiskSpace');
+        if (!button) return;
+        button.classList.toggle('d-none', !diskCache.length);
+    }
+
+    function showDiskSpace() {
+        var list = $('diskList');
+        list.textContent = '';
+        for (var i = 0; i < diskCache.length; i++) {
+            var line = document.createElement('div');
+            line.className = 'disk-line';
+            line.textContent = diskCache[i].name + '剩余可用：' + sizeText(diskCache[i].free);
+            list.appendChild(line);
+        }
+        modal('diskModal').show();
     }
 
     async function getJson(path) {
@@ -272,7 +303,7 @@
             if (resolver) resolver(names);
         });
         $('rosterClear').addEventListener('click', async function () {
-            var ok = await askConfirm('清除预置名字', '确定清除预置名字并关闭？', true);
+            var ok = await askConfirm('清除讲者名单', '确定清除讲者名单并关闭？', true);
             if (!ok) return;
             var resolver = state.rosterResolver;
             state.rosterResolver = null;
@@ -643,7 +674,8 @@
                 state.lastSignature = null;
                 state.lastRosterSignature = null;
                 loadList(true);
-            } else if (state.rosterEnabled) {
+            } else {
+                state.lastSignature = null;
                 state.lastRosterSignature = null;
                 loadList(true);
             }
@@ -661,7 +693,7 @@
         treeMenu = null;
     }
 
-    function showTreeMenu(x, y, path) {
+    function showTreeMenu(x, y, path, isRoot) {
         hideTreeMenu();
         var menu = document.createElement('div');
         menu.className = 'tree-menu';
@@ -678,8 +710,11 @@
             menu.appendChild(button);
         }
 
-        addItem('重命名', false, function () { openFolderDialog('rename', path); });
-        addItem('删除', true, function () { deleteFolder(path); });
+        addItem('下载', false, function () { downloadFolder(path); });
+        if (!isRoot) {
+            addItem('重命名', false, function () { openFolderDialog('rename', path); });
+            addItem('删除', true, function () { deleteFolder(path); });
+        }
 
         document.body.appendChild(menu);
         var left = Math.min(x, window.innerWidth - menu.offsetWidth - 8);
@@ -751,6 +786,7 @@
 
     async function refreshStatus() {
         var data = await getJson('/api/status');
+        updateDisks(data.disks);
         state.concurrent = Math.max(1, data.concurrent || 3);
         state.dirs = data.dirs || [];
         if (!state.dirId || !state.dirs.some(function (d) { return d.id === state.dirId; })) {
@@ -884,12 +920,10 @@
         row.addEventListener('click', function () {
             selectFolder(path);
         });
-        if (!isRoot) {
-            row.addEventListener('contextmenu', function (event) {
-                event.preventDefault();
-                showTreeMenu(event.clientX, event.clientY, path);
-            });
-        }
+        row.addEventListener('contextmenu', function (event) {
+            event.preventDefault();
+            showTreeMenu(event.clientX, event.clientY, path, isRoot);
+        });
 
         box.appendChild(row);
 
@@ -964,6 +998,124 @@
             '&path=' + encodeURIComponent(file.path);
     }
 
+    var packTasks = {};
+
+    function downloadFolder(path) {
+        var url = '/api/folder/prepare?dirId=' + encodeURIComponent(state.dirId) +
+            '&path=' + encodeURIComponent(path || '');
+        getJson(url).then(function (res) {
+            if (!packTasks[res.token]) addPackTask(res.token, res.name);
+            pollPack(res.token);
+        }).catch(function (err) {
+            toast(err.message || '打包失败');
+        });
+    }
+
+    function addPackTask(token, name) {
+        var row = document.createElement('div');
+        row.className = 'download-item';
+
+        var top = document.createElement('div');
+        top.className = 'upload-top';
+        var label = document.createElement('span');
+        label.className = 'upload-name';
+        label.textContent = name + '.zip';
+        var stateEl = document.createElement('span');
+        stateEl.className = 'upload-state';
+        stateEl.textContent = '0%';
+        var cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'download-cancel';
+        cancel.title = '取消';
+        var cancelIcon = document.createElement('i');
+        cancelIcon.className = 'bi bi-x-lg';
+        cancel.appendChild(cancelIcon);
+        cancel.addEventListener('click', function () { cancelPack(token); });
+        top.appendChild(label);
+        top.appendChild(stateEl);
+        top.appendChild(cancel);
+
+        var prog = document.createElement('div');
+        prog.className = 'progress download-progress';
+        var bar = document.createElement('div');
+        bar.className = 'progress-bar';
+        bar.style.width = '0%';
+        prog.appendChild(bar);
+
+        row.appendChild(top);
+        row.appendChild(prog);
+        $('downloadList').appendChild(row);
+        $('downloadPanel').classList.add('active');
+
+        packTasks[token] = {
+            el: row, bar: bar, state: stateEl, name: name, timer: null, cancel: cancel
+        };
+    }
+
+    function cancelPack(token) {
+        var task = packTasks[token];
+        if (!task) return;
+        task.cancelled = true;
+        clearTimeout(task.timer);
+        if (task.cancel.parentNode) task.cancel.parentNode.removeChild(task.cancel);
+        task.state.textContent = '已取消';
+        task.bar.classList.add('bg-secondary');
+        removePackTask(token, 1500);
+        postJson('/api/folder/cancel', { id: token }).catch(function () { });
+    }
+
+    function removePackTask(token, delay) {
+        var task = packTasks[token];
+        if (!task) return;
+        if (delay) {
+            task.timer = setTimeout(function () { removePackTask(token); }, delay);
+            return;
+        }
+        clearTimeout(task.timer);
+        if (task.el.parentNode) task.el.parentNode.removeChild(task.el);
+        delete packTasks[token];
+        if (!Object.keys(packTasks).length) $('downloadPanel').classList.remove('active');
+    }
+
+    function pollPack(token) {
+        var task = packTasks[token];
+        if (!task) return;
+        getJson('/api/folder/status?token=' + encodeURIComponent(token)).then(function (res) {
+            var current = packTasks[token];
+            if (!current || current.cancelled) return;
+            if (res.state === 'ready') {
+                var link = document.createElement('a');
+                link.href = '/api/folder/download?token=' + encodeURIComponent(token);
+                link.download = current.name + '.zip';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                current.bar.style.width = '100%';
+                current.state.textContent = '已开始下载';
+                if (res.skipped) toast('已跳过 ' + res.skipped + ' 个无法读取的文件');
+                removePackTask(token, 3000);
+                return;
+            }
+            if (res.state === 'error') {
+                current.state.textContent = res.error || '打包失败';
+                current.bar.classList.add('bg-danger');
+                toast(res.error || '打包失败');
+                removePackTask(token, 8000);
+                return;
+            }
+            var pct = res.total > 0 ? Math.min(99, Math.round(res.done * 100 / res.total)) : 0;
+            current.bar.style.width = pct + '%';
+            current.state.textContent = pct + '%';
+            current.timer = setTimeout(function () { pollPack(token); }, 500);
+        }).catch(function (err) {
+            var current = packTasks[token];
+            if (!current || current.cancelled) return;
+            current.state.textContent = err.message || '打包失败';
+            toast(err.message || '打包失败');
+            removePackTask(token, 8000);
+        });
+    }
+
     var PREVIEW_KINDS = {
         png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image',
         mp4: 'video', webm: 'video', mov: 'video', m4v: 'video',
@@ -1034,6 +1186,7 @@
         state.rosterNames = (data && data.names) || [];
         $('rosterToggle').checked = state.rosterEnabled;
         $('btnRosterEdit').classList.toggle('d-none', !state.rosterEnabled);
+        $('btnRosterShot').classList.toggle('d-none', !state.rosterEnabled);
         updatePickButton();
         return data;
     }
@@ -1066,6 +1219,7 @@
         }
         if (seq !== state.listSeq || dirId !== state.dirId || folder !== state.folder) return;
         var files = data.files || [];
+        var folders = data.folders || [];
         state.total = data.total || 0;
         $('fileCount').textContent = state.total + ' 个文件';
         var pages = Math.max(1, Math.ceil(state.total / state.size));
@@ -1076,13 +1230,14 @@
         }
 
         renderCrumbs();
-        var signature = state.page + '|' + state.total + '|' + JSON.stringify(files);
+        var signature = state.page + '|' + state.total + '|' +
+            JSON.stringify(folders) + '|' + JSON.stringify(files);
         if (!force && signature === state.lastSignature) {
             renderPager();
             return;
         }
         state.lastSignature = signature;
-        renderFiles(files);
+        renderFiles(folders, files);
         renderPager();
     }
 
@@ -1105,13 +1260,18 @@
         state.rosterNames = [];
         $('rosterToggle').checked = false;
         $('btnRosterEdit').classList.add('d-none');
+        $('btnRosterShot').classList.add('d-none');
         updatePickButton();
         renderCrumbs();
     }
 
     function renderRoster(items, force) {
-        var uploaded = items.filter(function (item) { return (item.count || 0) > 0; });
-        var pending = items.filter(function (item) { return !(item.count > 0); });
+        var uploaded = items.filter(function (item) {
+            return (item.count || 0) > 0 || (item.folders || 0) > 0;
+        });
+        var pending = items.filter(function (item) {
+            return !(item.count > 0) && !(item.folders > 0);
+        });
         $('fileCount').textContent = '已上传 ' + uploaded.length + ' / ' + items.length;
         $('pager').textContent = '';
         $('pager').classList.add('d-none');
@@ -1160,7 +1320,9 @@
     }
 
     function buildRosterCard(item) {
-        var uploaded = (item.count || 0) > 0;
+        var count = item.count || 0;
+        var folders = item.folders || 0;
+        var uploaded = count > 0 || folders > 0;
         var folderPath = state.folder ? state.folder + '\\' + item.name : item.name;
 
         var card = document.createElement('div');
@@ -1179,7 +1341,10 @@
         if (uploaded) {
             var meta = document.createElement('div');
             meta.className = 'roster-meta';
-            meta.textContent = item.count + ' 个文件';
+            var parts = [];
+            if (count > 0) parts.push(count + ' 个文件');
+            if (folders > 0) parts.push(folders + ' 个文件夹');
+            meta.textContent = parts.join(' · ');
             main.appendChild(meta);
         }
 
@@ -1211,17 +1376,121 @@
             card.classList.remove('dragover');
             dragDepth = 0;
             $('dropHint').classList.remove('show');
-            var files = event.dataTransfer.files;
-            if (files && files.length) addFiles(files, state.dirId, folderPath);
+            addDroppedFiles(event.dataTransfer, state.dirId, folderPath);
         });
         return card;
     }
 
-    function renderFiles(files) {
+    var shotBusy = false;
+    var shotText = '';
+
+    function rosterText(source) {
+        var groups = [];
+        Array.prototype.forEach.call(source.children, function (node) {
+            var title = node.querySelector('.roster-group-title');
+            var grid = node.querySelector('.roster-grid');
+            if (!title || !grid) return;
+            var names = [];
+            Array.prototype.forEach.call(grid.children, function (card) {
+                var name = card.querySelector('.roster-name');
+                if (name && name.textContent) names.push(name.textContent);
+            });
+            groups.push({ title: title.textContent, names: names });
+        });
+        if (!groups.length) return '';
+
+        function block(prefix) {
+            for (var i = 0; i < groups.length; i++) {
+                if (groups[i].title.indexOf(prefix) === 0) {
+                    return groups[i].title + '\n' +
+                        (groups[i].names.length ? groups[i].names.join('，') : '无');
+                }
+            }
+            return prefix + ' 0\n无';
+        }
+        return block('已上传') + '\n\n' + block('未上传');
+    }
+
+    function copyPlainText(text) {
+        var copied = false;
+        function onCopy(event) {
+            if (!event.clipboardData) return;
+            event.clipboardData.setData('text/plain', text);
+            event.preventDefault();
+            copied = true;
+        }
+        document.addEventListener('copy', onCopy);
+
+        var area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.left = '0';
+        area.style.top = '0';
+        area.style.width = '2px';
+        area.style.height = '2px';
+        area.style.padding = '0';
+        area.style.border = 'none';
+        area.style.background = 'transparent';
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        area.setSelectionRange(0, text.length);
+
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (err) { }
+        area.remove();
+        document.removeEventListener('copy', onCopy);
+        return ok || copied;
+    }
+
+    function showRosterShot() {
+        if (shotBusy || !window.html2canvas) return;
+        var source = $('fileList');
+        if (!source || !source.children.length) return;
+        shotBusy = true;
+        shotText = rosterText(source);
+
+        var maxItems = 0;
+        Array.prototype.forEach.call(source.children, function (node) {
+            var grid = node.querySelector('.roster-grid');
+            if (grid) maxItems = Math.max(maxItems, grid.children.length);
+        });
+
+        var stride = 178;
+        var padding = 28;
+        var fit = Math.floor((source.clientWidth - padding + 8) / stride);
+        if (fit < 1) fit = 1;
+        var columns = Math.max(1, Math.min(maxItems, fit));
+        var width = maxItems ? columns * stride - 8 + padding : source.clientWidth;
+
+        var host = document.createElement('div');
+        host.style.position = 'fixed';
+        host.style.left = '-10000px';
+        host.style.top = '0';
+        host.style.width = width + 'px';
+        host.style.background = getComputedStyle(document.body).backgroundColor;
+        Array.prototype.forEach.call(source.children, function (node) {
+            host.appendChild(node.cloneNode(true));
+        });
+        document.body.appendChild(host);
+
+        html2canvas(host, { backgroundColor: null, scale: 2, logging: false }).then(function (canvas) {
+            $('shotImage').src = canvas.toDataURL('image/png');
+            modal('shotModal').show();
+        }).catch(function (err) {
+            toast(err && err.message ? err.message : '截图失败');
+        }).then(function () {
+            if (host.parentNode) host.parentNode.removeChild(host);
+            shotBusy = false;
+        });
+    }
+
+    function renderFiles(folders, files) {
         var host = $('fileList');
         var scroll = host.scrollTop;
         host.textContent = '';
-        if (!files.length) {
+        if (!folders.length && !files.length) {
             var empty = document.createElement('div');
             empty.className = 'empty';
             var icon = document.createElement('i');
@@ -1234,10 +1503,63 @@
             host.scrollTop = 0;
             return;
         }
+        folders.forEach(function (folder) {
+            host.appendChild(buildFolderRow(folder));
+        });
         files.forEach(function (file) {
             host.appendChild(buildFileRow(file));
         });
         host.scrollTop = scroll;
+    }
+
+    function buildFolderRow(folder) {
+        var row = document.createElement('div');
+        row.className = 'file-row folder-row';
+
+        var iconBox = document.createElement('div');
+        iconBox.className = 'fi-icon';
+        var icon = document.createElement('i');
+        icon.className = 'bi bi-folder2';
+        iconBox.appendChild(icon);
+
+        var main = document.createElement('div');
+        main.className = 'fi-main';
+        var nameEl = document.createElement('div');
+        nameEl.className = 'fi-name';
+        nameEl.textContent = folder.name;
+        nameEl.title = folder.path;
+        main.appendChild(nameEl);
+        if (folder.mtime) {
+            var metaEl = document.createElement('div');
+            metaEl.className = 'fi-meta';
+            metaEl.textContent = folder.mtime;
+            main.appendChild(metaEl);
+        }
+
+        var actions = document.createElement('div');
+        actions.className = 'fi-actions';
+        var download = document.createElement('button');
+        download.type = 'button';
+        download.className = 'icon-btn';
+        download.title = '下载';
+        var downloadIcon = document.createElement('i');
+        downloadIcon.className = 'bi bi-download';
+        download.appendChild(downloadIcon);
+        download.addEventListener('click', function (event) {
+            event.stopPropagation();
+            downloadFolder(folder.path);
+        });
+        actions.appendChild(download);
+
+        row.appendChild(iconBox);
+        row.appendChild(main);
+        row.appendChild(actions);
+        row.addEventListener('click', function () { selectFolder(folder.path); });
+        row.addEventListener('contextmenu', function (event) {
+            event.preventDefault();
+            showTreeMenu(event.clientX, event.clientY, folder.path);
+        });
+        return row;
     }
 
     function buildFileRow(file) {
@@ -1413,14 +1735,25 @@
     }
 
     function addFiles(files, dirId, folder) {
+        var entries = Array.prototype.map.call(files, function (file) {
+            return { file: file, folder: '' };
+        });
+        addFileEntries(entries, dirId, folder);
+    }
+
+    function joinFolder(base, sub) {
+        if (!sub) return base || '';
+        return base ? base + '\\' + sub : sub;
+    }
+
+    function addFileEntries(entries, dirId, folder) {
         if (!state.dirId) {
             toast('尚未添加目录');
             return;
         }
         var target = dirId || state.dirId;
         var targetFolder = folder == null ? state.folder : folder;
-        var list = Array.prototype.slice.call(files);
-        if (!list.length) return;
+        if (!entries.length) return;
         state.panelCollapsed = false;
 
         var ongoing = state.uploads.some(function (item) {
@@ -1434,13 +1767,14 @@
             batchSeq++;
         }
 
-        list.forEach(function (file) {
+        entries.forEach(function (entry) {
+            var file = entry.file;
             var item = {
                 key: ++uploadSeq,
                 batch: batchSeq,
                 file: file,
                 dirId: target,
-                folder: targetFolder,
+                folder: joinFolder(targetFolder, entry.folder),
                 name: file.name,
                 size: file.size,
                 hash: null,
@@ -1470,6 +1804,178 @@
         updateQueueVisibility();
         updateSummary();
         pump();
+    }
+
+    /* ---------------- dropped folders ---------------- */
+
+    var invalidNamePattern = /[\\/:*?"<>|\x00-\x1f]/;
+
+    function droppedRoots(dataTransfer) {
+        var roots = [];
+        if (!dataTransfer) return roots;
+        var items = dataTransfer.items;
+        if (items && items.length) {
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                if (item.kind !== 'file') continue;
+                var entry = null;
+                if (typeof item.webkitGetAsEntry === 'function') {
+                    try { entry = item.webkitGetAsEntry(); } catch (err) { entry = null; }
+                }
+                if (entry) {
+                    roots.push(entry);
+                    continue;
+                }
+                var file = item.getAsFile ? item.getAsFile() : null;
+                if (file) roots.push({ fallbackFile: file });
+            }
+            if (roots.length) return roots;
+        }
+        var files = dataTransfer.files;
+        if (!files) return roots;
+        for (var j = 0; j < files.length; j++) roots.push({ fallbackFile: files[j] });
+        return roots;
+    }
+
+    function readFileEntry(entry) {
+        return new Promise(function (resolve) {
+            try {
+                entry.file(function (file) { resolve(file); }, function () { resolve(null); });
+            } catch (err) {
+                resolve(null);
+            }
+        });
+    }
+
+    function readDirectoryEntries(reader) {
+        return new Promise(function (resolve) {
+            var all = [];
+            function step() {
+                reader.readEntries(function (batch) {
+                    if (!batch || !batch.length) {
+                        resolve(all);
+                        return;
+                    }
+                    for (var i = 0; i < batch.length; i++) all.push(batch[i]);
+                    step();
+                }, function () { resolve(all); });
+            }
+            step();
+        });
+    }
+
+    async function walkDropRoot(root, folder, out) {
+        if (!root) return;
+        if (root.fallbackFile) {
+            out.push({ file: root.fallbackFile, folder: folder });
+            return;
+        }
+        if (root.isFile) {
+            var file = await readFileEntry(root);
+            if (file) out.push({ file: file, folder: folder });
+            return;
+        }
+        if (!root.isDirectory) return;
+        var name = root.name || '';
+        if (!name || name === '.' || name === '..' || invalidNamePattern.test(name)) return;
+        var next = folder ? folder + '\\' + name : name;
+        var children = await readDirectoryEntries(root.createReader());
+        for (var i = 0; i < children.length; i++) {
+            await walkDropRoot(children[i], next, out);
+        }
+    }
+
+    async function ensureFolderPath(dirId, rel) {
+        if (!rel) return true;
+        var segments = rel.split('\\');
+        var current = '';
+        for (var i = 0; i < segments.length; i++) {
+            var name = segments[i];
+            if (!name) continue;
+            var result;
+            try {
+                result = await postJson('/api/folder/create', {
+                    dirId: dirId,
+                    folder: current,
+                    name: name
+                });
+            } catch (err) {
+                return false;
+            }
+            if (!result.ok && !/已存在/.test(result.error || '')) return false;
+            current = current ? current + '\\' + name : name;
+        }
+        return true;
+    }
+
+    async function addDroppedFiles(dataTransfer, dirId, folder) {
+        if (!state.dirId) {
+            toast('尚未添加目录');
+            return;
+        }
+        var roots = droppedRoots(dataTransfer);
+        if (!roots.length) return;
+
+        var all = [];
+        for (var i = 0; i < roots.length; i++) {
+            await walkDropRoot(roots[i], '', all);
+        }
+        if (!all.length) {
+            toast('没有可上传的文件');
+            return;
+        }
+
+        var target = dirId || state.dirId;
+        var base = folder == null ? state.folder : folder;
+        var entries = [];
+        var folders = [];
+        var seenFolders = {};
+        var skipped = false;
+        for (var j = 0; j < all.length; j++) {
+            var entry = all[j];
+            var segments = entry.folder ? entry.folder.split('\\') : [];
+            var bad = false;
+            for (var k = 0; k < segments.length; k++) {
+                if (invalidNamePattern.test(segments[k])) {
+                    bad = true;
+                    break;
+                }
+            }
+            if (bad) {
+                skipped = true;
+                continue;
+            }
+            entries.push(entry);
+            if (!entry.folder) continue;
+            var full = joinFolder(base, entry.folder);
+            if (seenFolders[full]) continue;
+            seenFolders[full] = true;
+            folders.push(full);
+        }
+        if (skipped) toast('部分文件夹名无效，已跳过');
+        if (!entries.length) {
+            toast('没有可上传的文件');
+            return;
+        }
+
+        if (folders.length) {
+            var created = true;
+            for (var m = 0; m < folders.length; m++) {
+                if (!(await ensureFolderPath(target, folders[m]))) {
+                    created = false;
+                    break;
+                }
+            }
+            if (!created) {
+                toast('文件夹创建失败');
+                return;
+            }
+            for (var n = 0; n < folders.length; n++) expandPath(folders[n]);
+            loadTree(true);
+            loadList(false);
+        }
+
+        addFileEntries(entries, target, base);
     }
 
     async function startItem(item) {
@@ -2146,6 +2652,14 @@
 
         $('rosterToggle').addEventListener('change', onRosterToggle);
         $('btnRosterEdit').addEventListener('click', editRoster);
+        $('btnRosterShot').addEventListener('click', showRosterShot);
+        $('btnShotCopy').addEventListener('click', function () {
+            if (!shotText) {
+                toast('暂无名单');
+                return;
+            }
+            toast(copyPlainText(shotText) ? '已复制' : '复制失败');
+        });
 
         $('sortSelect').addEventListener('change', function () {
             state.sort = this.value;
@@ -2160,6 +2674,8 @@
             modal('qrModal').show();
         });
 
+        $('btnDiskSpace').addEventListener('click', function () { showDiskSpace(); });
+
         $('btnFoldUploads').addEventListener('click', function () {
             if (!state.uploads.length) return;
             state.panelCollapsed = !state.panelCollapsed;
@@ -2172,6 +2688,22 @@
             });
             state.uploads = keep;
             rebuildUploads();
+        });
+
+        $('btnClearAll').addEventListener('click', function () {
+            var keep = state.uploads.filter(function (item) {
+                return item.status === 'queued' || item.status === 'hashing' ||
+                    item.status === 'ready' || item.status === 'init' ||
+                    item.status === 'conflict' || item.status === 'uploading' ||
+                    item.status === 'completing';
+            });
+            state.uploads = keep;
+            rebuildUploads();
+        });
+
+        $('btnClearDownloads').addEventListener('click', function () {
+            var tokens = Object.keys(packTasks);
+            for (var i = 0; i < tokens.length; i++) removePackTask(tokens[i]);
         });
 
         window.addEventListener('dragenter', function (event) {
@@ -2207,8 +2739,7 @@
                 loadList(false);
                 return;
             }
-            var files = event.dataTransfer.files;
-            if (files && files.length) addFiles(files);
+            addDroppedFiles(event.dataTransfer, null, undefined);
         });
 
         document.addEventListener('keydown', function (event) {

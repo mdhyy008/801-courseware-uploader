@@ -32,6 +32,9 @@
     <div class="conn-state">
         <span>服务器连接状态</span>
         <span class="conn-dot" id="connDot" title="未连接"></span>
+        <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnDiskSpace" title="磁盘空间">
+            <i class="bi bi-hdd"></i>
+        </button>
     </div>
     <div class="topbar-right">
         <button type="button" class="btn btn-primary btn-sm" id="btnPick">
@@ -54,11 +57,14 @@
             </div>
             <div class="toolbar-right">
                 <div class="form-check form-switch roster-switch">
+                    <label class="form-check-label" for="rosterToggle">讲者名单模式</label>
                     <input class="form-check-input" type="checkbox" role="switch" id="rosterToggle">
-                    <label class="form-check-label" for="rosterToggle">预置名字</label>
                 </div>
-                <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnRosterEdit" title="预置名字">
+                <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnRosterEdit" title="讲者名单模式">
                     <i class="bi bi-people"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnRosterShot" title="状况截图">
+                    <i class="bi bi-camera"></i>
                 </button>
                 <select class="form-select form-select-sm" id="sortSelect" title="排序">
                     <option value="mtime">时间</option>
@@ -78,24 +84,41 @@
     </section>
 </main>
 
-<section class="upload-panel" id="uploadPanel">
-    <div class="upload-head">
-        <span class="upload-head-left">
-            <span id="uploadTitle">上传队列</span>
-            <span class="upload-stats" id="uploadStats"></span>
-        </span>
-        <span class="d-flex align-items-center gap-2">
-            <span class="upload-state" id="uploadSummary"></span>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearDone" title="清除已完成">
-                <i class="bi bi-check2-all"></i>
+<div class="queue-stack">
+    <section class="download-panel" id="downloadPanel">
+        <div class="upload-head">
+            <span class="upload-head-left">
+                <span id="downloadTitle">下载队列</span>
+            </span>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearDownloads" title="清空记录">
+                <i class="bi bi-trash3"></i>
             </button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnFoldUploads" title="收起">
-                <i class="bi bi-chevron-up" id="foldIcon"></i>
-            </button>
-        </span>
-    </div>
-    <div class="upload-list" id="uploadList"></div>
-</section>
+        </div>
+        <div class="upload-list" id="downloadList"></div>
+    </section>
+
+    <section class="upload-panel" id="uploadPanel">
+        <div class="upload-head">
+            <span class="upload-head-left">
+                <span id="uploadTitle">上传队列</span>
+                <span class="upload-stats" id="uploadStats"></span>
+            </span>
+            <span class="d-flex align-items-center gap-2">
+                <span class="upload-state" id="uploadSummary"></span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearAll" title="清空记录">
+                    <i class="bi bi-trash3"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearDone" title="清除已完成">
+                    <i class="bi bi-check2-all"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnFoldUploads" title="收起">
+                    <i class="bi bi-chevron-up" id="foldIcon"></i>
+                </button>
+            </span>
+        </div>
+        <div class="upload-list" id="uploadList"></div>
+    </section>
+</div>
 
 <div class="drop-hint" id="dropHint">
     <div>
@@ -109,6 +132,10 @@
 <div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">扫码访问</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
             <div class="modal-body qr-box">
                 <img id="qrImage" alt="二维码">
             </div>
@@ -162,6 +189,39 @@
     </div>
 </div>
 
+<div class="modal fade" id="shotModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">状况截图</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body preview-body">
+                <img class="preview-media" id="shotImage" alt="状况截图">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnShotCopy">
+                    <i class="bi bi-clipboard"></i> 复制文本
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="diskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">服务端磁盘占用</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <div id="diskList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
@@ -197,7 +257,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">预置名字</h5>
+                <h5 class="modal-title">讲者名单模式</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
             </div>
             <div class="modal-body">
@@ -246,6 +306,7 @@
 </div>
 
 <script src="/vendor/bootstrap.bundle.min.js"></script>
+<script src="/vendor/html2canvas.min.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

@@ -14,6 +14,7 @@ namespace _801CoursewareUploader
         private readonly FluentTextBox concurrencyBox;
         private readonly FluentTextBox whitelistBox;
         private readonly FluentTextBox passwordBox;
+        private readonly FluentToggle hiddenToggle;
         private readonly FluentButton defaultsButton;
         private readonly FluentButton cancelButton;
         private readonly FluentButton saveButton;
@@ -22,6 +23,7 @@ namespace _801CoursewareUploader
         private Rectangle concurrencyLabel;
         private Rectangle whitelistLabel;
         private Rectangle passwordLabel;
+        private Rectangle hiddenLabel;
         private Rectangle cacheLabel;
         private string cacheText;
 
@@ -36,6 +38,7 @@ namespace _801CoursewareUploader
             {
                 AppConfig copy = new AppConfig();
                 copy.MaxConcurrent = c.MaxConcurrent;
+                copy.ShowHiddenFiles = c.ShowHiddenFiles;
                 copy.Whitelist = new List<string>(c.Whitelist);
                 return copy;
             });
@@ -54,6 +57,10 @@ namespace _801CoursewareUploader
             passwordBox.Password = true;
             passwordBox.Hint = "无密码";
             Controls.Add(passwordBox);
+
+            hiddenToggle = new FluentToggle();
+            hiddenToggle.Checked = snapshot.ShowHiddenFiles;
+            Controls.Add(hiddenToggle);
 
             cacheText = "缓存 " + Draw.FormatSize(uploads.CacheBytes());
             clearCacheButton = new FluentButton();
@@ -87,7 +94,7 @@ namespace _801CoursewareUploader
 
             int pad = Draw.Scale(this, 20);
             int width = Draw.Scale(this, 480);
-            int height = Draw.Scale(this, 404);
+            int height = Draw.Scale(this, 448);
             ClientSize = new Size(width, height);
 
             int fieldWidth = width - pad * 2;
@@ -103,12 +110,18 @@ namespace _801CoursewareUploader
             passwordLabel = new Rectangle(pad, Draw.Scale(this, 240), fieldWidth, labelHeight);
             passwordBox.Bounds = new Rectangle(pad, Draw.Scale(this, 262), Draw.Scale(this, 280), inputHeight);
 
+            int toggleWidth = Draw.Scale(this, 44);
+            int toggleHeight = Draw.Scale(this, 24);
+            hiddenLabel = new Rectangle(pad, Draw.Scale(this, 310), fieldWidth, Draw.Scale(this, 28));
+            hiddenToggle.Bounds = new Rectangle(width - pad - toggleWidth, Draw.Scale(this, 312),
+                toggleWidth, toggleHeight);
+
             int cacheHeight = Draw.Scale(this, 24);
             int cacheButtonWidth = Math.Max(Draw.Scale(this, 64),
                 TextRenderer.MeasureText(clearCacheButton.Text, clearCacheButton.Font).Width + Draw.Scale(this, 24));
-            clearCacheButton.Bounds = new Rectangle(width - pad - cacheButtonWidth, Draw.Scale(this, 306),
+            clearCacheButton.Bounds = new Rectangle(width - pad - cacheButtonWidth, Draw.Scale(this, 350),
                 cacheButtonWidth, cacheHeight);
-            cacheLabel = new Rectangle(pad, Draw.Scale(this, 306),
+            cacheLabel = new Rectangle(pad, Draw.Scale(this, 350),
                 fieldWidth - cacheButtonWidth - Draw.Scale(this, 8), cacheHeight);
 
             int buttonHeight = Draw.Scale(this, 32);
@@ -174,12 +187,15 @@ namespace _801CoursewareUploader
                 return;
             }
 
+            bool showHidden = hiddenToggle.Checked;
             ConfigStore.Instance.Mutate(delegate(AppConfig c)
             {
                 c.MaxConcurrent = concurrency;
                 c.Whitelist = list;
+                c.ShowHiddenFiles = showHidden;
             });
             catalog.SetWhitelist(list);
+            catalog.SetShowHiddenFiles(showHidden);
 
             auth.SetPassword(passwordBox.Text);
 
@@ -197,6 +213,9 @@ namespace _801CoursewareUploader
                 Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
                 TextFormatFlags.NoPrefix);
             TextRenderer.DrawText(e.Graphics, "访问密码", Theme.FontBody, passwordLabel,
+                Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(e.Graphics, "显示隐藏文件", Theme.FontBody, hiddenLabel,
                 Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
                 TextFormatFlags.NoPrefix);
             TextRenderer.DrawText(e.Graphics, cacheText, Theme.FontBody, cacheLabel,

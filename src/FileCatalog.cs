@@ -49,10 +49,18 @@ namespace _801CoursewareUploader
             public DateTime Modified;
         }
 
+        public sealed class FolderView
+        {
+            public string Name;
+            public string RelPath;
+            public DateTime Modified;
+        }
+
         public sealed class RosterStatusView
         {
             public string Name;
             public int Count;
+            public int FolderCount;
             public long Bytes;
             public DateTime Modified;
         }
@@ -83,10 +91,12 @@ namespace _801CoursewareUploader
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly BlockingCollection<string> indexQueue = new BlockingCollection<string>();
         private readonly Thread indexThread;
+        private bool showHidden;
 
         public FileCatalog()
         {
             ReloadWhitelist();
+            ReloadHiddenFiles();
             LoadDirectories();
             indexThread = new Thread(IndexWorker);
             indexThread.IsBackground = true;
@@ -115,6 +125,49 @@ namespace _801CoursewareUploader
                 }
             }
             ReindexAll();
+        }
+
+        private void ReloadHiddenFiles()
+        {
+            bool value = ConfigStore.Instance.Read(delegate(AppConfig c) { return c.ShowHiddenFiles; });
+            lock (gate) showHidden = value;
+        }
+
+        public void SetShowHiddenFiles(bool value)
+        {
+            bool changed;
+            lock (gate)
+            {
+                changed = showHidden != value;
+                showHidden = value;
+            }
+            if (!changed) return;
+            List<string> ids = new List<string>();
+            lock (gate)
+            {
+                foreach (string id in dirs.Keys) ids.Add(id);
+            }
+            for (int i = 0; i < ids.Count; i++) InvalidateTree(ids[i]);
+            ReindexAll();
+        }
+
+        private bool IsHiddenPath(string fullPath)
+        {
+            lock (gate)
+            {
+                if (showHidden) return false;
+            }
+            try
+            {
+                FileAttributes attrs = File.GetAttributes(fullPath);
+                if ((attrs & FileAttributes.Hidden) != 0) return true;
+            }
+            catch
+            {
+                return false;
+            }
+            string name = Path.GetFileName(fullPath);
+            return name.Length > 0 && name[0] == '.';
         }
 
         public bool IsWhitelisted(string fileName)
@@ -514,6 +567,7 @@ namespace _801CoursewareUploader
                 {
                     for (int i = 0; i < files.Length; i++)
                     {
+                        if (IsHiddenPath(files[i])) continue;
                         if (IsWhitelisted(files[i])) result.Add(files[i]);
                     }
                 }
@@ -521,6 +575,7 @@ namespace _801CoursewareUploader
                 {
                     for (int i = 0; i < subs.Length; i++)
                     {
+                        if (IsHiddenPath(subs[i])) continue;
                         try
                         {
                             FileAttributes attrs = File.GetAttributes(subs[i]);
@@ -667,11 +722,25 @@ namespace _801CoursewareUploader
                 view.Modified = DateTime.MinValue;
                 result.Add(view);
                 if (fullFolder == null || !IsSafeFileName(view.Name)) continue;
+                string personFolder = Path.Combine(fullFolder, view.Name);
+                try
+                {
+                    string[] dirs = Directory.GetDirectories(personFolder);
+                    for (int d = 0; d < dirs.Length; d++)
+                    {
+                        if (IsHiddenPath(dirs[d])) continue;
+                        view.FolderCount++;
+                    }
+                }
+                catch
+                {
+                }
                 string[] files;
-                try { files = Directory.GetFiles(Path.Combine(fullFolder, view.Name)); }
+                try { files = Directory.GetFiles(personFolder); }
                 catch { continue; }
                 for (int j = 0; j < files.Length; j++)
                 {
+                    if (IsHiddenPath(files[j])) continue;
                     if (!IsWhitelisted(Path.GetFileName(files[j]))) continue;
                     try
                     {
@@ -730,6 +799,7 @@ namespace _801CoursewareUploader
                 for (int i = 0; i < files.Length; i++)
                 {
                     string name = Path.GetFileName(files[i]);
+                    if (IsHiddenPath(files[i])) continue;
                     if (!IsWhitelisted(name)) continue;
                     try
                     {
@@ -786,6 +856,7 @@ namespace _801CoursewareUploader
             Array.Sort(subs, StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < subs.Length; i++)
             {
+                if (IsHiddenPath(subs[i])) continue;
                 try
                 {
                     FileAttributes attrs = File.GetAttributes(subs[i]);
@@ -798,6 +869,35 @@ namespace _801CoursewareUploader
                 string name = Path.GetFileName(subs[i]);
                 string rel = NormalizeRel(folder);
                 result.Add(rel.Length == 0 ? name : rel + "\\" + name);
+            }
+            return result;
+        }
+
+        public List<FolderView> ListChildFolders(string dirId, string folder)
+        {
+            List<FolderView> result = new List<FolderView>();
+            DirectoryState state = GetState(dirId);
+            if (state == null) return result;
+            string fullFolder;
+            if (!TryCombine(state.Entry.Path, folder, out fullFolder)) return result;
+            string[] subs = null;
+            try { subs = Directory.GetDirectories(fullFolder); } catch { }
+            if (subs == null) return result;
+            Array.Sort(subs, StringComparer.OrdinalIgnoreCase);
+            string relFolder = NormalizeRel(folder);
+            for (int i = 0; i < subs.Length; i++)
+            {
+                if (IsHiddenPath(subs[i])) continue;
+                FileAttributes attrs;
+                try { attrs = File.GetAttributes(subs[i]); }
+                catch { continue; }
+                if ((attrs & FileAttributes.ReparsePoint) != 0) continue;
+                FolderView view = new FolderView();
+                view.Name = Path.GetFileName(subs[i]);
+                view.RelPath = relFolder.Length == 0 ? view.Name : relFolder + "\\" + view.Name;
+                try { view.Modified = new DirectoryInfo(subs[i]).LastWriteTime; }
+                catch { view.Modified = DateTime.MinValue; }
+                result.Add(view);
             }
             return result;
         }
@@ -831,6 +931,7 @@ namespace _801CoursewareUploader
                 if (subs == null) continue;
                 for (int i = 0; i < subs.Length; i++)
                 {
+                    if (IsHiddenPath(subs[i])) continue;
                     try
                     {
                         FileAttributes attrs = File.GetAttributes(subs[i]);
