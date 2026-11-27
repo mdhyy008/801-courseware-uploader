@@ -15,6 +15,7 @@ namespace _801CoursewareUploader
         private readonly FluentTextBox whitelistBox;
         private readonly FluentTextBox passwordBox;
         private readonly FluentToggle hiddenToggle;
+        private readonly FluentToggle screenToggle;
         private readonly FluentButton defaultsButton;
         private readonly FluentButton cancelButton;
         private readonly FluentButton saveButton;
@@ -24,6 +25,7 @@ namespace _801CoursewareUploader
         private Rectangle whitelistLabel;
         private Rectangle passwordLabel;
         private Rectangle hiddenLabel;
+        private Rectangle screenLabel;
         private Rectangle cacheLabel;
         private string cacheText;
 
@@ -39,6 +41,7 @@ namespace _801CoursewareUploader
                 AppConfig copy = new AppConfig();
                 copy.MaxConcurrent = c.MaxConcurrent;
                 copy.ShowHiddenFiles = c.ShowHiddenFiles;
+                copy.ScreenControlEnabled = c.ScreenControlEnabled;
                 copy.Whitelist = new List<string>(c.Whitelist);
                 return copy;
             });
@@ -61,6 +64,10 @@ namespace _801CoursewareUploader
             hiddenToggle = new FluentToggle();
             hiddenToggle.Checked = snapshot.ShowHiddenFiles;
             Controls.Add(hiddenToggle);
+
+            screenToggle = new FluentToggle();
+            screenToggle.Checked = snapshot.ScreenControlEnabled;
+            Controls.Add(screenToggle);
 
             cacheText = "缓存 " + Draw.FormatSize(uploads.CacheBytes());
             clearCacheButton = new FluentButton();
@@ -94,7 +101,7 @@ namespace _801CoursewareUploader
 
             int pad = Draw.Scale(this, 20);
             int width = Draw.Scale(this, 480);
-            int height = Draw.Scale(this, 448);
+            int height = Draw.Scale(this, 486);
             ClientSize = new Size(width, height);
 
             int fieldWidth = width - pad * 2;
@@ -116,12 +123,16 @@ namespace _801CoursewareUploader
             hiddenToggle.Bounds = new Rectangle(width - pad - toggleWidth, Draw.Scale(this, 312),
                 toggleWidth, toggleHeight);
 
+            screenLabel = new Rectangle(pad, Draw.Scale(this, 348), fieldWidth, Draw.Scale(this, 28));
+            screenToggle.Bounds = new Rectangle(width - pad - toggleWidth, Draw.Scale(this, 350),
+                toggleWidth, toggleHeight);
+
             int cacheHeight = Draw.Scale(this, 24);
             int cacheButtonWidth = Math.Max(Draw.Scale(this, 64),
                 TextRenderer.MeasureText(clearCacheButton.Text, clearCacheButton.Font).Width + Draw.Scale(this, 24));
-            clearCacheButton.Bounds = new Rectangle(width - pad - cacheButtonWidth, Draw.Scale(this, 350),
+            clearCacheButton.Bounds = new Rectangle(width - pad - cacheButtonWidth, Draw.Scale(this, 388),
                 cacheButtonWidth, cacheHeight);
-            cacheLabel = new Rectangle(pad, Draw.Scale(this, 350),
+            cacheLabel = new Rectangle(pad, Draw.Scale(this, 388),
                 fieldWidth - cacheButtonWidth - Draw.Scale(this, 8), cacheHeight);
 
             int buttonHeight = Draw.Scale(this, 32);
@@ -188,11 +199,13 @@ namespace _801CoursewareUploader
             }
 
             bool showHidden = hiddenToggle.Checked;
+            bool screenEnabled = screenToggle.Checked;
             ConfigStore.Instance.Mutate(delegate(AppConfig c)
             {
                 c.MaxConcurrent = concurrency;
                 c.Whitelist = list;
                 c.ShowHiddenFiles = showHidden;
+                c.ScreenControlEnabled = screenEnabled;
             });
             catalog.SetWhitelist(list);
             catalog.SetShowHiddenFiles(showHidden);
@@ -216,6 +229,9 @@ namespace _801CoursewareUploader
                 Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
                 TextFormatFlags.NoPrefix);
             TextRenderer.DrawText(e.Graphics, "显示隐藏文件", Theme.FontBody, hiddenLabel,
+                Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(e.Graphics, "屏幕控制", Theme.FontBody, screenLabel,
                 Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
                 TextFormatFlags.NoPrefix);
             TextRenderer.DrawText(e.Graphics, cacheText, Theme.FontBody, cacheLabel,

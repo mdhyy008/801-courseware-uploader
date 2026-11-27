@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace _801CoursewareUploader
@@ -17,6 +18,7 @@ namespace _801CoursewareUploader
 
         private readonly FluentButton addButton;
         private readonly FluentButton settingsButton;
+        private readonly FluentButton manualButton;
         private readonly FluentButton copyButton;
         private readonly FluentButton refreshButton;
         private readonly FluentButton qrButton;
@@ -45,7 +47,8 @@ namespace _801CoursewareUploader
 
         public MainForm()
         {
-            Text = "801课件上传工具";
+            Version version = Assembly.GetExecutingAssembly().GetName().Version;
+            Text = "801课件上传工具 v" + version.ToString(3);
             BackColor = Theme.Window;
             ForeColor = Theme.Text;
             Font = Theme.FontBody;
@@ -72,6 +75,13 @@ namespace _801CoursewareUploader
             settingsButton.Style = FluentButton.Variant.Secondary;
             settingsButton.Click += delegate { OpenSettings(); };
             Controls.Add(settingsButton);
+
+            manualButton = new FluentButton();
+            manualButton.Text = "说明书";
+            manualButton.Style = FluentButton.Variant.Secondary;
+            manualButton.Enabled = serverOk;
+            manualButton.Click += delegate { OpenManual(); };
+            Controls.Add(manualButton);
 
             copyButton = new FluentButton();
             copyButton.Icon = FluentButton.Glyph.Copy;
@@ -226,8 +236,9 @@ namespace _801CoursewareUploader
         {
             base.OnLayout(e);
 
-            if (addButton == null || settingsButton == null || copyButton == null ||
-                refreshButton == null || qrButton == null || listPanel == null) return;
+            if (addButton == null || settingsButton == null || manualButton == null ||
+                copyButton == null || refreshButton == null || qrButton == null ||
+                listPanel == null) return;
 
             int padX = Draw.Scale(this, 20);
             int top = Draw.Scale(this, 12);
@@ -235,10 +246,13 @@ namespace _801CoursewareUploader
 
             int settingsWidth = MeasureButton(settingsButton, Draw.Scale(this, 68));
             int addWidth = MeasureButton(addButton, Draw.Scale(this, 90));
+            int manualWidth = MeasureButton(manualButton, Draw.Scale(this, 68));
             settingsButton.Bounds = new Rectangle(ClientSize.Width - padX - settingsWidth,
                 top, settingsWidth, buttonHeight);
             addButton.Bounds = new Rectangle(settingsButton.Left - Draw.Scale(this, 6) - addWidth,
                 top, addWidth, buttonHeight);
+            manualButton.Bounds = new Rectangle(addButton.Left - Draw.Scale(this, 6) - manualWidth,
+                top, manualWidth, buttonHeight);
 
             int qrSize = Draw.Scale(this, 24);
             int qrGap = Draw.Scale(this, 6);
@@ -320,6 +334,26 @@ namespace _801CoursewareUploader
             base.OnMouseUp(e);
             if (e.Button != MouseButtons.Left) return;
             if (serverOk && addressRect.Contains(e.Location)) OpenAddress();
+        }
+
+        private void OpenManual()
+        {
+            if (!serverOk)
+            {
+                ShowToast("服务未启动");
+                return;
+            }
+            try
+            {
+                ProcessStartInfo info = new ProcessStartInfo();
+                info.FileName = addressText.TrimEnd('/') + "/manual.html";
+                info.UseShellExecute = true;
+                Process.Start(info);
+            }
+            catch
+            {
+                ShowToast("无法打开说明书");
+            }
         }
 
         private void OpenAddress()
@@ -420,9 +454,41 @@ namespace _801CoursewareUploader
 
             if (cards.Count == 0)
             {
-                TextRenderer.DrawText(g, "尚未添加目录", Theme.FontBody, listPanel.Bounds,
-                    Theme.TextMuted, TextFormatFlags.HorizontalCenter |
+                int maxWidth = Math.Min(
+                    Math.Max(listPanel.Width - Draw.Scale(this, 56), Draw.Scale(this, 320)),
+                    Draw.Scale(this, 780));
+                string hint = "此软件是放在 讲课电脑 / 被控电脑 进行打开的，" +
+                    "在另一台设备 使用网页来上传文件和控制本设备。";
+                string tip = "如果不会使用，请查看说明书。";
+                Size hintSize = TextRenderer.MeasureText(g, hint, Theme.FontEmptyText,
+                    new Size(maxWidth, int.MaxValue),
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                Size tipSize = TextRenderer.MeasureText(g, tip, Theme.FontEmptyText,
+                    new Size(maxWidth, int.MaxValue),
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                int headingHeight = Draw.Scale(this, 40);
+                int gap = Draw.Scale(this, 18);
+                int tipGap = Draw.Scale(this, 10);
+                int totalHeight = headingHeight + gap + hintSize.Height +
+                    tipGap + tipSize.Height;
+                int top = listPanel.Top + (listPanel.Height - totalHeight) / 2;
+                Rectangle headingRect = new Rectangle(listPanel.Left, top,
+                    listPanel.Width, headingHeight);
+                Rectangle hintRect = new Rectangle(
+                    listPanel.Left + (listPanel.Width - maxWidth) / 2,
+                    top + headingHeight + gap, maxWidth, hintSize.Height);
+                Rectangle tipRect = new Rectangle(
+                    hintRect.Left, hintRect.Bottom + tipGap, maxWidth, tipSize.Height);
+
+                TextRenderer.DrawText(g, "尚未添加目录", Theme.FontEmptyTitle, headingRect,
+                    Theme.Text, TextFormatFlags.HorizontalCenter |
                     TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(g, hint, Theme.FontEmptyText, hintRect,
+                    Theme.TextMuted, TextFormatFlags.HorizontalCenter |
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(g, tip, Theme.FontEmptyText, tipRect,
+                    Theme.Accent, TextFormatFlags.HorizontalCenter |
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
             }
         }
 

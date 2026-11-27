@@ -152,6 +152,8 @@
         if (!dot) return;
         dot.classList.toggle('ok', ok);
         dot.title = ok ? '已连接' : '未连接';
+        var text = $('connText');
+        if (text) text.textContent = '服务器连接状态：' + (ok ? '已连接' : '未连接');
     }
 
     function heartbeat() {
@@ -159,10 +161,39 @@
             markConnection(true);
             return response.json();
         }).then(function (data) {
-            if (data) updateDisks(data.disks);
+            if (!data) return;
+            updateDisks(data.disks);
+            updateScreenEnabled(data.screen);
+            updateServerLabel(data);
         }).catch(function () {
             markConnection(false);
         });
+    }
+
+    function updateScreenEnabled(enabled) {
+        var button = $('btnScreen');
+        if (button) button.classList.toggle('d-none', !enabled);
+    }
+
+    function updateServerLabel(data) {
+        if (!data) return;
+        var version = $('brandVersion');
+        if (version && data.version) version.textContent = 'v' + data.version;
+        var device = data.device || '';
+        var where = '';
+        if (data.ip) {
+            where = data.ip + (data.port ? ':' + data.port : '');
+        }
+        var label = device && where ? device + ' · ' + where : (device || where);
+        var info = $('connInfo');
+        if (info && label) {
+            info.textContent = label;
+            info.title = label;
+        }
+        if (device) {
+            deviceName = device;
+            applyScreenTitle();
+        }
     }
 
     function sizeText(bytes) {
@@ -179,6 +210,32 @@
         var button = $('btnDiskSpace');
         if (!button) return;
         button.classList.toggle('d-none', !diskCache.length);
+        updateDiskMeter();
+    }
+
+    function updateDiskMeter() {
+        var meter = $('diskMeter');
+        if (!meter) return;
+        var total = 0;
+        var free = 0;
+        var known = false;
+        for (var i = 0; i < diskCache.length; i++) {
+            var disk = diskCache[i];
+            if (!disk || !(disk.total > 0)) continue;
+            total += disk.total;
+            free += disk.free;
+            known = true;
+        }
+        if (!known || total <= 0) {
+            meter.classList.add('d-none');
+            return;
+        }
+        free = Math.max(0, Math.min(total, free));
+        var used = (total - free) / total * 100;
+        $('diskMeterUsed').style.width = used.toFixed(1) + '%';
+        $('diskMeterText').textContent = '剩余 ' + sizeText(free) + ' / ' + sizeText(total);
+        meter.classList.remove('d-none');
+        meter.title = '已占用 ' + sizeText(total - free) + '，剩余 ' + sizeText(free);
     }
 
     function showDiskSpace() {
@@ -787,6 +844,8 @@
     async function refreshStatus() {
         var data = await getJson('/api/status');
         updateDisks(data.disks);
+        updateScreenEnabled(data.screen);
+        updateServerLabel(data);
         state.concurrent = Math.max(1, data.concurrent || 3);
         state.dirs = data.dirs || [];
         if (!state.dirId || !state.dirs.some(function (d) { return d.id === state.dirId; })) {
@@ -1116,6 +1175,803 @@
         });
     }
 
+    var screenInfo = null;
+    var screenIndex = 0;
+    var screenErrorShown = false;
+    var deviceName = '';
+
+    function applyScreenTitle() {
+        var title = '屏幕控制' + (deviceName ? '：' + deviceName : '');
+        var modalTitle = $('screenTitle');
+        if (modalTitle) modalTitle.textContent = title;
+        var floatTitle = $('screenFloatTitle');
+        if (floatTitle) floatTitle.textContent = title;
+    }
+
+    var hintToneTimer = 0;
+    var hintToneCanvas = document.createElement('canvas');
+
+    function startHintTone() {
+        stopHintTone();
+        sampleHintTone();
+        hintToneTimer = setInterval(sampleHintTone, 400);
+    }
+
+    function stopHintTone() {
+        if (hintToneTimer) {
+            clearInterval(hintToneTimer);
+            hintToneTimer = 0;
+        }
+    }
+
+    function sampleHintTone() {
+        var text = document.querySelector('.screen-float-hint-text');
+        if (!text) return;
+        var media = screenTransport === 'diff' ? $('screenCanvas')
+            : screenTransport === 'mjpeg' ? $('screenImage') : $('screenVideo');
+        if (!media) return;
+        var width = 0;
+        var height = 0;
+        if (media.tagName === 'CANVAS') {
+            width = media.width;
+            height = media.height;
+        } else if (media.tagName === 'IMG') {
+            if (!media.complete || !media.naturalWidth) return;
+            width = media.naturalWidth;
+            height = media.naturalHeight;
+        } else {
+            if (!media.videoWidth) return;
+            width = media.videoWidth;
+            height = media.videoHeight;
+        }
+        if (!width || !height) return;
+        try {
+            hintToneCanvas.width = 32;
+            hintToneCanvas.height = 32;
+            var ctx = hintToneCanvas.getContext('2d');
+            ctx.drawImage(media, 0, 0, 32, 32);
+            var data = ctx.getImageData(0, 0, 32, 32).data;
+            var sum = 0;
+            for (var i = 0; i < data.length; i += 4) {
+                sum += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+            }
+            var lum = sum / (data.length / 4);
+            text.classList.toggle('dark', lum > 140);
+        } catch (e) { }
+    }
+    var screenTransport = 'mjpeg';
+    var screenWs = null;
+    var screenPc = null;
+    var screenRtcId = null;
+    var screenStatsTimer = null;
+
+    // 默认改为 MJPEG，换新键避免沿用旧版本存下的「差分」偏好
+    try {
+        var savedTransport = localStorage.getItem('screenTransport.v2');
+        if (savedTransport === 'diff' || savedTransport === 'mjpeg' || savedTransport === 'rtc') {
+            screenTransport = savedTransport;
+        }
+    } catch (e) { }
+
+    function screenAt(index) {
+        if (!screenInfo || !screenInfo.screens) return null;
+        for (var i = 0; i < screenInfo.screens.length; i++) {
+            if (screenInfo.screens[i].id === index) return screenInfo.screens[i];
+        }
+        return null;
+    }
+
+    function showScreenElement(kind) {
+        $('screenImage').classList.toggle('d-none', kind !== 'mjpeg');
+        $('screenCanvas').classList.toggle('d-none', kind !== 'diff');
+        $('screenVideo').classList.toggle('d-none', kind !== 'rtc');
+    }
+
+    function formatScreenRate(bps) {
+        if (!bps || bps < 1000) return '0 Kbps';
+        if (bps >= 1000000) return (bps / 1000000).toFixed(1) + ' Mbps';
+        return Math.round(bps / 1000) + ' Kbps';
+    }
+
+    function screenBandwidthBand(bps) {
+        if (bps >= 8000000) return { text: '画面带宽占用较大', cls: 'screen-bw-high' };
+        if (bps >= 1500000) return { text: '画面带宽占用正常', cls: 'screen-bw-ok' };
+        return { text: '画面带宽占用较小', cls: 'screen-bw-low' };
+    }
+
+    function refreshScreenStats() {
+        var el = $('screenStats');
+        if (!el) return;
+        var kind = screenTransport;
+        var index = screenIndex;
+        getJson('/api/screen/stats?screen=' + index + '&kind=' + kind).then(function (stat) {
+            if (!screenInfo || kind !== screenTransport || index !== screenIndex) return;
+            var bps = stat.bps || 0;
+            var band = screenBandwidthBand(bps);
+            el.innerHTML = '<span class="screen-bw ' + band.cls + '">' + band.text + '</span> · ' +
+                formatScreenRate(bps) + ' · ' + (stat.fps || 0) + ' fps';
+        }).catch(function () { });
+    }
+
+    function startScreenStats() {
+        stopScreenStats();
+        refreshScreenStats();
+        screenStatsTimer = setInterval(refreshScreenStats, 1000);
+    }
+
+    function stopScreenStats() {
+        if (screenStatsTimer) {
+            clearInterval(screenStatsTimer);
+            screenStatsTimer = null;
+        }
+        var el = $('screenStats');
+        if (el) el.textContent = '';
+    }
+
+    var screenLoadingTimer = 0;
+    var screenLockSize = null;
+
+    function screenLoadingVisible() {
+        var overlay = $('screenLoading');
+        return !!overlay && !overlay.classList.contains('d-none');
+    }
+
+    function captureScreenSnapshot() {
+        var candidates = [$('screenCanvas'), $('screenImage'), $('screenVideo')];
+        for (var i = 0; i < candidates.length; i++) {
+            var media = candidates[i];
+            if (!media || media.classList.contains('d-none')) continue;
+            var width = 0;
+            var height = 0;
+            if (media.tagName === 'CANVAS') {
+                width = media.width;
+                height = media.height;
+            } else if (media.tagName === 'IMG') {
+                if (!media.complete) continue;
+                width = media.naturalWidth;
+                height = media.naturalHeight;
+            } else {
+                width = media.videoWidth;
+                height = media.videoHeight;
+            }
+            if (!width || !height) continue;
+            try {
+                var scale = Math.min(1, 720 / width);
+                var snap = document.createElement('canvas');
+                snap.width = Math.max(1, Math.round(width * scale));
+                snap.height = Math.max(1, Math.round(height * scale));
+                snap.getContext('2d').drawImage(media, 0, 0, snap.width, snap.height);
+                return snap.toDataURL('image/jpeg', 0.7);
+            } catch (e) { }
+        }
+        return null;
+    }
+
+    function applyScreenSizeLock() {
+        if (!screenLockSize) return;
+        var dialog = $('screenModal').querySelector('.modal-dialog');
+        if (dialog && dialog.classList.contains('modal-fullscreen')) return;
+        var body = $('screenBody');
+        body.style.width = screenLockSize.width + 'px';
+        body.style.height = screenLockSize.height + 'px';
+    }
+
+    function beginScreenLoading() {
+        var body = $('screenBody');
+        var shot = captureScreenSnapshot();
+        $('screenLoadingBlur').style.backgroundImage = shot ? 'url("' + shot + '")' : 'none';
+
+        screenLockSize = null;
+        var dialog = $('screenModal').querySelector('.modal-dialog');
+        if (!dialog || !dialog.classList.contains('modal-fullscreen')) {
+            var width = body.clientWidth;
+            var height = body.clientHeight;
+            if (width < 80 || height < 80) {
+                var info = screenAt(screenIndex);
+                var aw = info && info.width ? info.width : 1920;
+                var ah = info && info.height ? info.height : 1080;
+                var maxW = Math.min(1140, window.innerWidth - 48);
+                var maxH = Math.min(window.innerHeight * 0.78, window.innerHeight - 150);
+                width = Math.max(320, maxW);
+                height = Math.round(width * ah / aw);
+                if (height > maxH) {
+                    height = Math.round(Math.max(180, maxH));
+                    width = Math.round(height * aw / ah);
+                }
+            }
+            if (width >= 80 && height >= 80) {
+                screenLockSize = { width: width, height: height };
+            }
+        }
+        applyScreenSizeLock();
+        $('screenLoading').classList.remove('d-none');
+        clearTimeout(screenLoadingTimer);
+        screenLoadingTimer = setTimeout(endScreenLoading, 12000);
+    }
+
+    function endScreenLoading() {
+        if (!screenLoadingVisible()) return;
+        clearTimeout(screenLoadingTimer);
+        screenLoadingTimer = 0;
+        var overlay = $('screenLoading');
+        if (overlay) overlay.classList.add('d-none');
+        $('screenLoadingBlur').style.backgroundImage = '';
+        screenLockSize = null;
+        var body = $('screenBody');
+        body.style.width = '';
+        body.style.height = '';
+    }
+
+    function startDiff() {
+        var url = (location.protocol === 'https:' ? 'wss://' : 'ws://') +
+            location.host + '/api/screen/live?screen=' + screenIndex;
+        var ws = new WebSocket(url);
+        ws.binaryType = 'arraybuffer';
+        screenWs = ws;
+        var canvas = $('screenCanvas');
+        ws.onmessage = function (event) {
+            if (screenWs !== ws) return;
+            drawScreenTiles(canvas, event.data);
+            endScreenLoading();
+        };
+        ws.onclose = function () {
+            if (screenWs === ws) screenWs = null;
+        };
+        ws.onerror = function () {
+            if (screenWs !== ws) return;
+            toast('差分画面连接失败');
+        };
+    }
+
+    function drawScreenTiles(canvas, data) {
+        var view = new DataView(data);
+        if (view.getUint8(0) !== 1) return;
+        var width = view.getUint16(2, true);
+        var height = view.getUint16(4, true);
+        if (!width || !height) return;
+        if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+        }
+        var ctx = canvas.getContext('2d');
+        var tileSize = view.getUint8(1);
+        var count = view.getUint16(6, true);
+        var cols = Math.ceil(width / tileSize);
+        var offset = 8;
+        for (var i = 0; i < count; i++) {
+            var index = view.getUint16(offset, true);
+            var tw = view.getUint8(offset + 2);
+            var th = view.getUint8(offset + 3);
+            offset += 4;
+            var pixels = new Uint8ClampedArray(data, offset, tw * th * 4);
+            ctx.putImageData(new ImageData(pixels, tw, th),
+                (index % cols) * tileSize, Math.floor(index / cols) * tileSize);
+            offset += tw * th * 4;
+        }
+    }
+
+    function startRtc() {
+        var video = $('screenVideo');
+        var pc = new RTCPeerConnection({ iceServers: [] });
+        screenPc = pc;
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.ontrack = function (event) {
+            var stream = event.streams && event.streams[0]
+                ? event.streams[0] : new MediaStream([event.track]);
+            video.srcObject = stream;
+            var playing = video.play();
+            if (playing && playing.catch) playing.catch(function () { });
+        };
+        pc.onconnectionstatechange = function () {
+            if (screenPc !== pc) return;
+            if (pc.connectionState === 'failed') toast('WebRTC 连接中断');
+        };
+        pc.createOffer().then(function (offer) {
+            return pc.setLocalDescription(offer);
+        }).then(function () {
+            return new Promise(function (resolve) {
+                if (pc.iceGatheringState === 'complete') {
+                    resolve();
+                    return;
+                }
+                var timer = setTimeout(resolve, 1500);
+                pc.addEventListener('icegatheringstatechange', function () {
+                    if (pc.iceGatheringState === 'complete') {
+                        clearTimeout(timer);
+                        resolve();
+                    }
+                });
+            });
+        }).then(function () {
+            return postJson('/api/rtc/offer', { sdp: pc.localDescription.sdp, screen: screenIndex });
+        }).then(function (answer) {
+            if (screenPc !== pc) return;
+            screenRtcId = answer.id;
+            return pc.setRemoteDescription({ type: 'answer', sdp: answer.sdp });
+        }).catch(function (err) {
+            if (screenPc !== pc) return;
+            toast(err.message || 'WebRTC 连接失败');
+            stopTransport();
+            setTransport('diff');
+            startTransport();
+        });
+    }
+
+    function stopTransport() {
+        stopScreenStats();
+        if (screenWs) {
+            try { screenWs.close(); } catch (e) { }
+            screenWs = null;
+        }
+        if (screenPc) {
+            var pc = screenPc;
+            screenPc = null;
+            try { pc.close(); } catch (e) { }
+            if (screenRtcId) {
+                var id = screenRtcId;
+                screenRtcId = null;
+                postJson('/api/rtc/close', { id: id }).catch(function () { });
+            }
+        }
+        $('screenImage').removeAttribute('src');
+        var video = $('screenVideo');
+        try { video.pause(); } catch (e) { }
+        video.srcObject = null;
+        var canvas = $('screenCanvas');
+        var ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function startTransport() {
+        beginScreenLoading();
+        stopTransport();
+        screenErrorShown = false;
+        showScreenElement(screenTransport);
+        if (screenTransport === 'diff') {
+            startDiff();
+        } else if (screenTransport === 'mjpeg') {
+            $('screenImage').src = '/api/screen/stream?screen=' + screenIndex + '&t=' + Date.now();
+        } else {
+            startRtc();
+        }
+        startScreenStats();
+    }
+
+    function updateTransportLabel() {
+        var names = { diff: '差分', mjpeg: 'MJPEG', rtc: 'WebRTC' };
+        var label = $('screenTransportLabel');
+        if (label) label.textContent = names[screenTransport] || 'MJPEG';
+        var items = document.querySelectorAll('#screenTransportMenu .dropdown-item');
+        for (var i = 0; i < items.length; i++) {
+            items[i].classList.toggle('active',
+                items[i].getAttribute('data-transport') === screenTransport);
+        }
+    }
+
+    function setTransport(kind) {
+        screenTransport = kind;
+        updateTransportLabel();
+        try { localStorage.setItem('screenTransport.v2', kind); } catch (e) { }
+    }
+
+    function selectScreen(index) {
+        if (screenIndex === index) return;
+        screenIndex = index;
+        startTransport();
+    }
+
+    function openScreen() {
+        if (screenMinimized) {
+            moveScreenMedia($('screenFloatBody'), $('screenBody'));
+            $('screenFloat').classList.add('d-none');
+            screenMinimized = false;
+        }
+        var screenDialog = $('screenModal').querySelector('.modal-dialog');
+        if (screenDialog) screenDialog.classList.remove('modal-fullscreen');
+        updateScreenMaxIcon();
+        applyScreenTitle();
+        getJson('/api/screen/info').then(function (info) {
+            screenInfo = info;
+            var select = $('screenSelect');
+            select.innerHTML = '';
+            var screens = info.screens || [];
+            for (var i = 0; i < screens.length; i++) {
+                var option = document.createElement('option');
+                option.value = String(screens[i].id);
+                option.textContent = screens[i].name;
+                select.appendChild(option);
+            }
+            screenIndex = info.primary >= 0 ? info.primary : 0;
+            select.value = String(screenIndex);
+            select.classList.toggle('d-none', screens.length < 2);
+            updateTransportLabel();
+            startTransport();
+            openPointerSocket();
+            modal('screenModal').show();
+        }).catch(function (err) {
+            toast(err.message || '无法获取屏幕');
+        });
+    }
+
+    var screenMinimized = false;
+    var screenFloatDrag = null;
+
+    function moveScreenMedia(from, to) {
+        var children = Array.prototype.slice.call(from.children);
+        for (var i = 0; i < children.length; i++) {
+            var child = children[i];
+            if (child.id === 'screenLoading') continue;
+            if (child.classList && child.classList.contains('screen-float-hint')) continue;
+            to.appendChild(child);
+        }
+    }
+
+    function minimizeScreen() {
+        moveScreenMedia($('screenBody'), $('screenFloatBody'));
+        $('screenFloat').classList.remove('d-none');
+        screenMinimized = true;
+        var instance = bootstrap.Modal.getInstance($('screenModal'));
+        if (instance) instance.hide();
+    }
+
+    function expandScreen() {
+        moveScreenMedia($('screenFloatBody'), $('screenBody'));
+        $('screenFloat').classList.add('d-none');
+        screenMinimized = false;
+        var instance = bootstrap.Modal.getInstance($('screenModal'));
+        if (instance) instance.show();
+    }
+
+    function closeScreenFromFloat() {
+        moveScreenMedia($('screenFloatBody'), $('screenBody'));
+        $('screenFloat').classList.add('d-none');
+        screenMinimized = false;
+        closeScreen();
+    }
+
+    function screenFloatDragStart(event) {
+        if (event.button !== 0) return;
+        if (event.target && event.target.closest('button')) return;
+        var float = $('screenFloat');
+        var rect = float.getBoundingClientRect();
+        screenFloatDrag = {
+            dx: event.clientX - rect.left,
+            dy: event.clientY - rect.top
+        };
+        float.style.right = 'auto';
+        float.style.left = rect.left + 'px';
+        float.style.top = rect.top + 'px';
+        event.preventDefault();
+        var bar = $('screenFloatBar');
+        if (bar.setPointerCapture) {
+            try { bar.setPointerCapture(event.pointerId); } catch (e) { }
+        }
+    }
+
+    function screenFloatDragMove(event) {
+        if (!screenFloatDrag) return;
+        var float = $('screenFloat');
+        var x = event.clientX - screenFloatDrag.dx;
+        var y = event.clientY - screenFloatDrag.dy;
+        var maxX = window.innerWidth - float.offsetWidth - 4;
+        var maxY = window.innerHeight - float.offsetHeight - 4;
+        float.style.left = Math.max(4, Math.min(maxX, x)) + 'px';
+        float.style.top = Math.max(4, Math.min(maxY, y)) + 'px';
+        event.preventDefault();
+    }
+
+    function screenFloatDragEnd() {
+        screenFloatDrag = null;
+    }
+
+    function toggleScreenMaximize() {
+        var dialog = $('screenModal').querySelector('.modal-dialog');
+        if (!dialog) return;
+        dialog.classList.toggle('modal-fullscreen');
+        if (screenLoadingVisible()) {
+            if (dialog.classList.contains('modal-fullscreen')) {
+                var body = $('screenBody');
+                body.style.width = '';
+                body.style.height = '';
+            } else {
+                applyScreenSizeLock();
+            }
+        }
+        updateScreenMaxIcon();
+    }
+
+    function updateScreenMaxIcon() {
+        var icon = document.querySelector('#screenMaximize i');
+        if (!icon) return;
+        var dialog = $('screenModal').querySelector('.modal-dialog');
+        var full = dialog && dialog.classList.contains('modal-fullscreen');
+        icon.className = full ? 'bi bi-fullscreen-exit' : 'bi bi-fullscreen';
+    }
+
+    function closeScreen() {
+        screenMinimized = false;
+        var float = $('screenFloat');
+        if (float) {
+            moveScreenMedia($('screenFloatBody'), $('screenBody'));
+            float.classList.add('d-none');
+        }
+        screenInfo = null;
+        closePointerSocket();
+        stopTransport();
+        endScreenLoading();
+        var dots = $('screenBody').querySelectorAll('.screen-ripple');
+        for (var i = 0; i < dots.length; i++) {
+            if (dots[i].parentNode) dots[i].parentNode.removeChild(dots[i]);
+        }
+    }
+
+    function screenRipple(event) {
+        var body = screenMinimized ? $('screenFloatBody') : $('screenBody');
+        var rect = body.getBoundingClientRect();
+        var dot = document.createElement('span');
+        dot.className = 'screen-ripple';
+        dot.style.left = (event.clientX - rect.left) + 'px';
+        dot.style.top = (event.clientY - rect.top) + 'px';
+        body.appendChild(dot);
+        dot.addEventListener('animationend', function () {
+            if (dot.parentNode) dot.parentNode.removeChild(dot);
+        });
+    }
+
+    var pointerSocket = null;
+    var pointerActive = false;
+    var pointerMoved = false;
+    var pointerOrigin = null;
+    var pointerLast = null;
+    var pointerPending = null;
+    var pointerFrame = 0;
+    var pointerMode = 'http';
+    var pointerChain = Promise.resolve();
+
+    function openPointerSocket() {
+        if (pointerSocket &&
+            (pointerSocket.readyState === 0 || pointerSocket.readyState === 1)) {
+            return;
+        }
+        try {
+            var ws = new WebSocket(
+                (location.protocol === 'https:' ? 'wss://' : 'ws://') +
+                location.host + '/api/screen/input');
+            pointerSocket = ws;
+            ws.onclose = function () {
+                if (pointerSocket === ws) pointerSocket = null;
+            };
+        } catch (e) {
+            pointerSocket = null;
+        }
+    }
+
+    function closePointerSocket() {
+        releaseKeys();
+        pointerActive = false;
+        pointerPending = null;
+        if (pointerFrame) {
+            cancelAnimationFrame(pointerFrame);
+            pointerFrame = 0;
+        }
+        if (pointerSocket) {
+            try { pointerSocket.close(); } catch (e) { }
+            pointerSocket = null;
+        }
+    }
+
+    function sendPointer(action, x, y, mode) {
+        if (mode !== 'http' && pointerSocket && pointerSocket.readyState === 1) {
+            try {
+                pointerSocket.send(action + ' ' + x + ' ' + y);
+                return;
+            } catch (e) { }
+        }
+        pointerChain = pointerChain.then(function () {
+            return postJson('/api/screen/pointer', { action: action, x: x, y: y });
+        }).catch(function () { });
+    }
+
+    function pointerChannel() {
+        return pointerSocket && pointerSocket.readyState === 1 ? 'ws' : 'http';
+    }
+
+    function screenPoint(event, element, clamp) {
+        var screen = screenAt(screenIndex);
+        if (!screen) return null;
+        var rect = element.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        var rx = (event.clientX - rect.left) / rect.width;
+        var ry = (event.clientY - rect.top) / rect.height;
+        if (clamp) {
+            rx = Math.max(0, Math.min(1, rx));
+            ry = Math.max(0, Math.min(1, ry));
+        } else if (rx < 0 || rx > 1 || ry < 0 || ry > 1) {
+            return null;
+        }
+        return {
+            x: Math.round(screen.left + rx * screen.width),
+            y: Math.round(screen.top + ry * screen.height)
+        };
+    }
+
+    function screenPointerDown(event, element) {
+        if (!screenInfo) return;
+        if (event.button === 2) {
+            var right = screenPoint(event, element, false);
+            if (!right) return;
+            event.preventDefault();
+            screenRipple(event);
+            sendPointer('r', right.x, right.y, pointerChannel());
+            return;
+        }
+        if (event.button !== 0) return;
+        var point = screenPoint(event, element, false);
+        if (!point) return;
+        event.preventDefault();
+        if (element.setPointerCapture) {
+            try { element.setPointerCapture(event.pointerId); } catch (e) { }
+        }
+        openPointerSocket();
+        pointerActive = true;
+        pointerMoved = false;
+        pointerOrigin = { x: event.clientX, y: event.clientY };
+        pointerLast = point;
+        pointerMode = pointerChannel();
+        sendPointer('d', point.x, point.y, pointerMode);
+    }
+
+    function screenPointerMove(event, element) {
+        if (!pointerActive) return;
+        if (!pointerMoved) {
+            var dx = event.clientX - pointerOrigin.x;
+            var dy = event.clientY - pointerOrigin.y;
+            if (dx * dx + dy * dy < 9) return;
+            pointerMoved = true;
+        }
+        var point = screenPoint(event, element, true);
+        if (!point) return;
+        pointerLast = point;
+        pointerPending = point;
+        if (pointerFrame) return;
+        pointerFrame = requestAnimationFrame(function () {
+            pointerFrame = 0;
+            var pending = pointerPending;
+            pointerPending = null;
+            if (!pointerActive || !pending) return;
+            sendPointer('m', pending.x, pending.y, pointerMode);
+        });
+    }
+
+    function screenPointerUp(event, element) {
+        if (!pointerActive) return;
+        pointerActive = false;
+        pointerPending = null;
+        if (pointerFrame) {
+            cancelAnimationFrame(pointerFrame);
+            pointerFrame = 0;
+        }
+        var point = screenPoint(event, element, true) || pointerLast;
+        if (point) sendPointer('u', point.x, point.y, pointerMode);
+        if (!pointerMoved) screenRipple(event);
+        if (element.releasePointerCapture) {
+            try { element.releasePointerCapture(event.pointerId); } catch (e) { }
+        }
+    }
+
+    function screenPointerCancel(event, element) {
+        if (!pointerActive) return;
+        pointerActive = false;
+        pointerPending = null;
+        if (pointerFrame) {
+            cancelAnimationFrame(pointerFrame);
+            pointerFrame = 0;
+        }
+        if (pointerLast) sendPointer('u', pointerLast.x, pointerLast.y, pointerMode);
+        if (element.releasePointerCapture) {
+            try { element.releasePointerCapture(event.pointerId); } catch (e) { }
+        }
+    }
+
+    var keyVkMap = {
+        Backquote: 0xC0, Minus: 0xBD, Equal: 0xBB,
+        BracketLeft: 0xDB, BracketRight: 0xDD, Backslash: 0xDC,
+        Semicolon: 0xBA, Quote: 0xDE, Comma: 0xBC, Period: 0xBE, Slash: 0xBF,
+        Space: 0x20, Escape: 0x1B, Tab: 0x09, Enter: 0x0D, NumpadEnter: 0x0D,
+        Backspace: 0x08, Delete: 0x2E, Insert: 0x2D,
+        Home: 0x24, End: 0x23, PageUp: 0x21, PageDown: 0x22,
+        ArrowLeft: 0x25, ArrowUp: 0x26, ArrowRight: 0x27, ArrowDown: 0x28,
+        ShiftLeft: 0x10, ShiftRight: 0x10, ControlLeft: 0x11, ControlRight: 0x11,
+        AltLeft: 0x12, AltRight: 0x12, MetaLeft: 0x5B, MetaRight: 0x5C,
+        CapsLock: 0x14, NumLock: 0x90, ScrollLock: 0x91, PrintScreen: 0x2C, Pause: 0x13,
+        ContextMenu: 0x5D, NumpadMultiply: 0x6A, NumpadAdd: 0x6B, NumpadSubtract: 0x6D,
+        NumpadDecimal: 0x6E, NumpadDivide: 0x6F
+    };
+
+    var keyNameVkMap = {
+        Escape: 0x1B, Tab: 0x09, Enter: 0x0D, Backspace: 0x08, Delete: 0x2E, Insert: 0x2D,
+        Home: 0x24, End: 0x23, PageUp: 0x21, PageDown: 0x22,
+        ArrowLeft: 0x25, ArrowUp: 0x26, ArrowRight: 0x27, ArrowDown: 0x28,
+        Shift: 0x10, Control: 0x11, Alt: 0x12, Meta: 0x5B,
+        CapsLock: 0x14, NumLock: 0x90, ScrollLock: 0x91, PrintScreen: 0x2C, Pause: 0x13,
+        ContextMenu: 0x5D, ' ': 0x20
+    };
+
+    var pressedKeys = {};
+
+    function keyToVk(event) {
+        var code = event.code || '';
+        var match;
+        if ((match = /^Key([A-Z])$/.exec(code))) return 65 + match[1].charCodeAt(0) - 65;
+        if ((match = /^Digit([0-9])$/.exec(code))) return 48 + parseInt(match[1], 10);
+        if ((match = /^Numpad([0-9])$/.exec(code))) return 96 + parseInt(match[1], 10);
+        if ((match = /^F([1-9]|1[0-2])$/.exec(code))) return 111 + parseInt(match[1], 10);
+        if (keyVkMap[code]) return keyVkMap[code];
+        if (keyNameVkMap[event.key]) return keyNameVkMap[event.key];
+        return 0;
+    }
+
+    function screenKeyboardActive() {
+        var element = $('screenModal');
+        return !!element && element.classList.contains('show');
+    }
+
+    function screenTyping(event) {
+        var target = event.target;
+        if (!target) return false;
+        var tag = target.tagName;
+        return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+    }
+
+    function sendKey(vk, down, mode) {
+        if (mode !== 'http' && pointerSocket && pointerSocket.readyState === 1) {
+            try {
+                pointerSocket.send('k ' + vk + ' ' + (down ? 1 : 0));
+                return;
+            } catch (e) { }
+        }
+        pointerChain = pointerChain.then(function () {
+            return postJson('/api/screen/pointer', { action: 'k', x: vk, y: down ? 1 : 0 });
+        }).catch(function () { });
+    }
+
+    function screenKeyHelpOpen() {
+        var menu = $('screenKeyHelpMenu');
+        return !!menu && menu.classList.contains('show');
+    }
+
+    function screenKeyDown(event) {
+        if (!screenKeyboardActive() || screenTyping(event) || screenKeyHelpOpen()) return;
+        var vk = keyToVk(event);
+        if (!vk) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat) return;
+        if (pressedKeys[vk] != null) return;
+        pressedKeys[vk] = pointerChannel();
+        sendKey(vk, true, pressedKeys[vk]);
+    }
+
+    function screenKeyUp(event) {
+        if (!screenKeyboardActive()) return;
+        var vk = keyToVk(event);
+        if (!vk) return;
+        event.preventDefault();
+        event.stopPropagation();
+        var mode = pressedKeys[vk];
+        if (mode == null) return;
+        delete pressedKeys[vk];
+        sendKey(vk, false, mode);
+    }
+
+    function releaseKeys() {
+        for (var vk in pressedKeys) {
+            if (!pressedKeys.hasOwnProperty(vk)) continue;
+            sendKey(parseInt(vk, 10), false, pressedKeys[vk]);
+        }
+        pressedKeys = {};
+    }
+
     var PREVIEW_KINDS = {
         png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image',
         mp4: 'video', webm: 'video', mov: 'video', m4v: 'video',
@@ -1245,13 +2101,24 @@
         var host = $('fileList');
         host.textContent = '';
         var empty = document.createElement('div');
-        empty.className = 'empty';
+        empty.className = 'empty empty-lg';
         var icon = document.createElement('i');
         icon.className = 'bi bi-folder-plus';
         empty.appendChild(icon);
         var text = document.createElement('div');
         text.textContent = '尚未添加目录';
         empty.appendChild(text);
+        var hint = document.createElement('div');
+        hint.className = 'empty-hint';
+        hint.textContent = '请在电脑端程序主窗口点击「添加目录」选择文件夹';
+        empty.appendChild(hint);
+        var manual = document.createElement('a');
+        manual.className = 'btn btn-outline-secondary btn-sm empty-action';
+        manual.href = '/manual.html';
+        manual.target = '_blank';
+        manual.rel = 'noopener';
+        manual.textContent = '说明书';
+        empty.appendChild(manual);
         host.appendChild(empty);
         $('pager').textContent = '';
         $('pager').classList.add('d-none');
@@ -2676,6 +3543,76 @@
 
         $('btnDiskSpace').addEventListener('click', function () { showDiskSpace(); });
 
+        $('btnScreen').addEventListener('click', function () { openScreen(); });
+        $('screenSelect').addEventListener('change', function () {
+            selectScreen(parseInt(this.value, 10));
+        });
+        updateTransportLabel();
+        $('screenTransportMenu').addEventListener('click', function (event) {
+            var item = event.target.closest ? event.target.closest('.dropdown-item[data-transport]') : null;
+            if (!item) return;
+            event.preventDefault();
+            var kind = item.getAttribute('data-transport');
+            if (kind === screenTransport) return;
+            setTransport(kind);
+            if (screenInfo) startTransport();
+        });
+        $('screenMaximize').addEventListener('click', toggleScreenMaximize);
+        $('screenMinimize').addEventListener('click', minimizeScreen);
+        $('screenFloatExpand').addEventListener('click', expandScreen);
+        $('screenFloatClose').addEventListener('click', closeScreenFromFloat);
+        var floatBar = $('screenFloatBar');
+        floatBar.addEventListener('pointerdown', screenFloatDragStart);
+        floatBar.addEventListener('pointermove', screenFloatDragMove);
+        floatBar.addEventListener('pointerup', screenFloatDragEnd);
+        floatBar.addEventListener('pointercancel', screenFloatDragEnd);
+        var floatBody = $('screenFloatBody');
+        floatBody.addEventListener('pointerenter', startHintTone);
+        floatBody.addEventListener('pointerleave', stopHintTone);
+        var screenTargets = [$('screenImage'), $('screenCanvas'), $('screenVideo')];
+        for (var s = 0; s < screenTargets.length; s++) {
+            (function (element) {
+                element.addEventListener('pointerdown', function (event) {
+                    screenPointerDown(event, element);
+                });
+                element.addEventListener('pointermove', function (event) {
+                    screenPointerMove(event, element);
+                });
+                element.addEventListener('pointerup', function (event) {
+                    screenPointerUp(event, element);
+                });
+                element.addEventListener('pointercancel', function (event) {
+                    screenPointerCancel(event, element);
+                });
+                element.addEventListener('contextmenu', function (event) {
+                    event.preventDefault();
+                });
+            })(screenTargets[s]);
+        }
+        document.addEventListener('keydown', screenKeyDown, true);
+        document.addEventListener('keyup', screenKeyUp, true);
+        window.addEventListener('blur', function () { releaseKeys(); });
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) releaseKeys();
+        });
+        $('screenImage').addEventListener('load', function () {
+            if (screenTransport === 'mjpeg') endScreenLoading();
+        });
+        $('screenImage').addEventListener('error', function () {
+            if (screenTransport !== 'mjpeg') return;
+            endScreenLoading();
+            if (!screenErrorShown && screenInfo) {
+                screenErrorShown = true;
+                toast('屏幕画面获取失败');
+            }
+        });
+        $('screenVideo').addEventListener('playing', function () {
+            if (screenTransport === 'rtc') endScreenLoading();
+        });
+        $('screenModal').addEventListener('hidden.bs.modal', function () {
+            if (!screenMinimized) closeScreen();
+        });
+
         $('btnFoldUploads').addEventListener('click', function () {
             if (!state.uploads.length) return;
             state.panelCollapsed = !state.panelCollapsed;
@@ -2820,6 +3757,8 @@
     /* ---------------- init ---------------- */
 
     async function init() {
+        console.log('%c801课件上传', 'font-size:16px;font-weight:700;color:#0d6efd');
+        console.log('开发者：明灯花月夜　网址：mdhyy.cn');
         worker = new Worker('/sha256-worker.js');
         worker.onmessage = function (event) {
             var message = event.data;

@@ -11,9 +11,11 @@
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <AutoUnifyAssemblyReferences>true</AutoUnifyAssemblyReferences>
     <Deterministic>true</Deterministic>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -48,6 +50,69 @@
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="netstandard" />
+    <Reference Include="SIPSorcery">
+      <HintPath>vendor\rtc\SIPSorcery.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SIPSorceryMedia.Abstractions">
+      <HintPath>vendor\rtc\SIPSorceryMedia.Abstractions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SIPSorceryMedia.Encoders">
+      <HintPath>vendor\rtc\SIPSorceryMedia.Encoders.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="BouncyCastle.Crypto">
+      <HintPath>vendor\rtc\BouncyCastle.Crypto.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="DnsClient">
+      <HintPath>vendor\rtc\DnsClient.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="websocket-sharp">
+      <HintPath>vendor\rtc\websocket-sharp.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>vendor\rtc\System.Buffers.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Net.WebSockets">
+      <HintPath>vendor\rtc\System.Net.WebSockets.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Net.WebSockets.Client">
+      <HintPath>vendor\rtc\System.Net.WebSockets.Client.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+      <HintPath>vendor\rtc\Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
+      <HintPath>vendor\rtc\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>vendor\rtc\System.Memory.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.ValueTuple">
+      <HintPath>vendor\rtc\System.ValueTuple.dll</HintPath>
+      <SpecificVersion>False</SpecificVersion>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>vendor\rtc\System.Numerics.Vectors.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>vendor\rtc\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Runtime.InteropServices.RuntimeInformation" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
@@ -63,6 +128,7 @@
     <Compile Include="src\Models.cs" />
     <Compile Include="src\Native.cs" />
     <Compile Include="src\QrCode.cs" />
+    <Compile Include="src\ScreenControl.cs" />
     <Compile Include="src\Theme.cs" />
     <Compile Include="src\UploadManager.cs" />
     <Compile Include="src\WebAuth.cs" />
@@ -104,6 +170,9 @@
     <EmbeddedResource Include="web\login.html">
       <LogicalName>web/login.html</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="web\manual.html">
+      <LogicalName>web/manual.html</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="web\app.js">
       <LogicalName>web/app.js</LogicalName>
     </EmbeddedResource>
@@ -131,6 +200,12 @@
     <EmbeddedResource Include="web\vendor\fonts\bootstrap-icons.woff">
       <LogicalName>web/vendor/fonts/bootstrap-icons.woff</LogicalName>
     </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="vendor\rtc\vpxmd.dll">
+      <Link>vpxmd.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

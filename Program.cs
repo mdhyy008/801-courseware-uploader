@@ -39,6 +39,14 @@ namespace _801CoursewareUploader
         private static void EnsureLanAccess()
         {
             int port = ConfigStore.Instance.Read(delegate(AppConfig c) { return c.Port; });
+            bool rtcReady = ConfigStore.Instance.Read(delegate(AppConfig c) { return c.RtcFirewall; });
+            if (!rtcReady)
+            {
+                string rtcError;
+                LanSetup.EnsureRegistered(port, true, out rtcError);
+                ConfigStore.Instance.Mutate(delegate(AppConfig c) { c.RtcFirewall = true; });
+                return;
+            }
             if (LanSetup.IsPortRegistered(port)) return;
             bool prompted = ConfigStore.Instance.Read(delegate(AppConfig c) { return c.LanPrompted; });
             if (prompted) return;

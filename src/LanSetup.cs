@@ -75,6 +75,13 @@ namespace _801CoursewareUploader
             string firewall = RunNetsh("advfirewall firewall add rule name=\"" + ruleName +
                 "\" dir=in action=allow protocol=TCP localport=" + port.ToString() + " profile=any");
             if (firewall == null) return 4;
+
+            string rtcRuleName = "CoursewareUploader WebRTC";
+            RunNetsh("advfirewall firewall delete rule name=\"" + rtcRuleName + "\"");
+            string rtcFirewall = RunNetsh("advfirewall firewall add rule name=\"" + rtcRuleName +
+                "\" dir=in action=allow program=\"" + Application.ExecutablePath +
+                "\" protocol=udp profile=any");
+            if (rtcFirewall == null) return 5;
             return 0;
         }
 
@@ -107,6 +114,12 @@ namespace _801CoursewareUploader
 
         public static string GetLanAddress(int port)
         {
+            string ip = GetLanIp();
+            return "http://" + (ip == null ? "localhost" : ip) + ":" + port.ToString() + "/";
+        }
+
+        public static string GetLanIp()
+        {
             try
             {
                 System.Net.NetworkInformation.NetworkInterface[] interfaces =
@@ -126,14 +139,14 @@ namespace _801CoursewareUploader
                         if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
                         string text = address.ToString();
                         if (text.StartsWith("169.254.")) continue;
-                        return "http://" + text + ":" + port.ToString() + "/";
+                        return text;
                     }
                 }
             }
             catch
             {
             }
-            return "http://localhost:" + port.ToString() + "/";
+            return null;
         }
     }
 }

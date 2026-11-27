@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>801课件上传 · 使用说明书</title>
+<script>
+(function () {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    function apply() {
+        document.documentElement.setAttribute('data-bs-theme', mq.matches ? 'dark' : 'light');
+    }
+    apply();
+    if (mq.addEventListener) mq.addEventListener('change', apply);
+    else if (mq.addListener) mq.addListener(apply);
+})();
+</script>
+<link rel="stylesheet" href="/vendor/bootstrap.min.css">
+<link rel="stylesheet" href="/vendor/bootstrap-icons.min.css">
+<style>
+    html {
+        scroll-padding-top: 16px;
+    }
+    body {
+        padding: 0 0 96px;
+        line-height: 1.75;
+    }
+    .manual-layout {
+        display: flex;
+        align-items: flex-start;
+        gap: 36px;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 24px 20px 0;
+    }
+    .manual-side {
+        flex: 0 0 208px;
+        width: 208px;
+        position: sticky;
+        top: 24px;
+    }
+    .manual-side .back-link {
+        display: block;
+        width: 100%;
+    }
+    .toc {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-top: 16px;
+    }
+    .toc a {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 13px;
+        text-decoration: none;
+        padding: 6px 10px;
+        border-radius: 8px;
+        color: var(--bs-secondary-color);
+        transition: background .15s, color .15s;
+    }
+    .toc a .num {
+        width: 18px;
+        flex: 0 0 18px;
+        text-align: center;
+        font-size: 11px;
+        color: var(--bs-tertiary-color);
+        font-variant-numeric: tabular-nums;
+    }
+    .toc a:hover {
+        background: var(--bs-tertiary-bg);
+        color: var(--bs-body-color);
+    }
+    .toc a.active {
+        background: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary-text-emphasis);
+        font-weight: 600;
+    }
+    .toc a.active .num {
+        color: var(--bs-primary-text-emphasis);
+    }
+
+    .manual {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 880px;
+    }
+
+    .manual-hero {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        border-radius: 20px;
+        border: 1px solid var(--bs-border-color);
+        background: linear-gradient(135deg, var(--bs-primary-bg-subtle), var(--bs-tertiary-bg) 60%, var(--bs-body-bg));
+        padding: 38px 40px;
+        margin-bottom: 28px;
+    }
+    .manual-hero .hero-badge {
+        display: inline-block;
+        padding: 3px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--bs-primary);
+        color: #fff;
+    }
+    .manual-hero h1 {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -.02em;
+        margin: 12px 0 6px;
+    }
+    .manual-hero .lead {
+        font-size: 14px;
+        color: var(--bs-secondary-color);
+        margin-bottom: 20px;
+    }
+    .manual-hero .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .hero-art {
+        flex: 0 0 300px;
+        max-width: 300px;
+    }
+    .art-stack {
+        position: relative;
+        height: 208px;
+    }
+    .art-zone {
+        position: absolute;
+        inset: 42px 18px 8px;
+        border: 2px dashed var(--bs-primary-border-subtle);
+        border-radius: 18px;
+        background: var(--bs-primary-bg-subtle);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .art-zone .bi {
+        font-size: 46px;
+        line-height: 1;
+        color: var(--bs-primary);
+    }
+    .art-zone span {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--bs-primary-text-emphasis);
+    }
+    .art-chip {
+        position: absolute;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 10px;
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, .08);
+        font-size: 12px;
+        white-space: nowrap;
+        animation: artFloat 4s ease-in-out infinite alternate;
+    }
+    .art-chip .bi {
+        font-size: 16px;
+        line-height: 1;
+    }
+    .art-chip-1 {
+        top: 2px;
+        left: -6px;
+        rotate: -4deg;
+    }
+    .art-chip-1 .bi {
+        color: var(--bs-danger);
+    }
+    .art-chip-2 {
+        top: 24px;
+        right: -10px;
+        rotate: 3deg;
+        animation-duration: 5s;
+        animation-delay: -1.5s;
+    }
+    .art-chip-2 .bi {
+        color: var(--bs-warning);
+    }
+    .art-chip-3 {
+        bottom: 34px;
+        left: -10px;
+        rotate: 2deg;
+        animation-duration: 6s;
+        animation-delay: -3s;
+    }
+    .art-chip-3 .bi {
+        color: var(--bs-purple);
+    }
+    @keyframes artFloat {
+        from { transform: translateY(-4px); }
+        to { transform: translateY(4px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .art-chip { animation: none; }
+    }
+
+    .manual h2 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 21px;
+        font-weight: 700;
+        margin: 52px 0 16px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--bs-border-color);
+        scroll-margin-top: 16px;
+    }
+    .manual h2 .step {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 28px;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary-text-emphasis);
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .manual h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 26px 0 10px;
+    }
+    .manual code {
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--bs-tertiary-bg);
+        color: var(--bs-body-color);
+        font-size: 13px;
+    }
+    .manual .lead-small {
+        color: var(--bs-secondary-color);
+        font-size: 13px;
+    }
+
+    .quick-steps {
+        list-style: none;
+        padding: 0;
+        margin: 16px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .quick-steps li {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 12px;
+        background: var(--bs-body-bg);
+    }
+    .quick-steps .qs-num {
+        flex: 0 0 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--bs-primary);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 12px;
+        margin: 18px 0;
+    }
+    .feature-card {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 12px;
+        padding: 16px;
+        background: var(--bs-body-bg);
+    }
+    .feature-card .bi {
+        font-size: 20px;
+        line-height: 1;
+        color: var(--bs-primary);
+    }
+    .feature-card h6 {
+        margin: 10px 0 4px;
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .feature-card p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--bs-secondary-color);
+    }
+
+    .manual-figure {
+        margin: 20px 0;
+        padding: 18px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 14px;
+        background: var(--bs-tertiary-bg);
+        text-align: center;
+    }
+    .manual-figure svg {
+        width: 100%;
+        max-width: 720px;
+        height: auto;
+        display: inline-block;
+    }
+    .manual-figure figcaption {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--bs-secondary-color);
+    }
+    .mock-svg text {
+        font-family: inherit;
+    }
+
+    .manual-table {
+        margin-top: 8px;
+    }
+    .manual-table th {
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .manual-accordion {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 14px;
+        overflow: hidden;
+        margin-top: 8px;
+    }
+    .manual-accordion .accordion-item:last-child .accordion-button.collapsed,
+    .manual-accordion .accordion-item:last-child .accordion-collapse {
+        border-bottom: 0;
+    }
+    .manual-accordion .accordion-header {
+        margin: 0;
+        font-size: inherit;
+    }
+    .manual-accordion .accordion-button {
+        font-size: 14px;
+        font-weight: 600;
+        padding: 14px 18px;
+    }
+    .manual-accordion .accordion-button:not(.collapsed) {
+        background: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary-text-emphasis);
+    }
+    .manual-accordion .accordion-body {
+        font-size: 14px;
+    }
+    .manual-accordion .accordion-body ul {
+        margin-bottom: 0;
+    }
+
+    .about-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 12px;
+        padding: 18px 20px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 14px;
+        background: var(--bs-body-bg);
+    }
+    .about-avatar {
+        flex: 0 0 46px;
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary-text-emphasis);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+    }
+    .about-card .about-name {
+        font-weight: 600;
+        font-size: 14px;
+    }
+    .about-card .about-link {
+        font-size: 13px;
+        color: var(--bs-secondary-color);
+        text-decoration: none;
+    }
+    .about-card .about-link:hover {
+        color: var(--bs-primary);
+    }
+
+    .footer {
+        margin-top: 56px;
+        padding-top: 16px;
+        border-top: 1px solid var(--bs-border-color);
+        font-size: 12px;
+        color: var(--bs-secondary-color);
+        text-align: center;
+    }
+
+    .back-top {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(8px);
+        transition: opacity .2s, transform .2s, visibility .2s;
+    }
+    .back-top.show {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+    }
+
+    @media (max-width: 900px) {
+        .manual-layout {
+            display: block;
+            padding-top: 16px;
+        }
+        .manual-side {
+            position: static;
+            width: auto;
+        }
+        .manual-side .back-link {
+            width: auto;
+            display: inline-block;
+        }
+        .toc {
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 24px;
+        }
+        .toc a {
+            border: 1px solid var(--bs-border-color);
+            border-radius: 999px;
+            padding: 4px 12px;
+        }
+        .toc a .num {
+            display: none;
+        }
+        .manual-hero {
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 26px 22px;
+        }
+        .hero-art {
+            flex: 0 0 auto;
+            align-self: center;
+            width: 78%;
+            max-width: 280px;
+        }
+        .manual-hero h1 {
+            font-size: 26px;
+        }
+    }
+</style>
+</head>
+<body data-bs-spy="scroll" data-bs-target="#manualToc" data-bs-root-margin="0px 0px -55%" data-bs-smooth-scroll="true" tabindex="0">
+<a id="top"></a>
+<div class="manual-layout">
+
+    <aside class="manual-side">
+        <a class="back-link btn btn-outline-secondary btn-sm" href="/">返回上传页面</a>
+        <nav class="toc" id="manualToc">
+            <a class="nav-link" href="#intro"><span class="num">01</span>简介</a>
+            <a class="nav-link" href="#start"><span class="num">02</span>快速开始</a>
+            <a class="nav-link" href="#desktop"><span class="num">03</span>电脑端程序</a>
+            <a class="nav-link" href="#upload"><span class="num">04</span>上传文件</a>
+            <a class="nav-link" href="#manage"><span class="num">05</span>文件管理</a>
+            <a class="nav-link" href="#roster"><span class="num">06</span>讲者名单模式</a>
+            <a class="nav-link" href="#screen"><span class="num">07</span>屏幕控制</a>
+            <a class="nav-link" href="#settings"><span class="num">08</span>设置项</a>
+            <a class="nav-link" href="#data"><span class="num">09</span>数据与删除</a>
+            <a class="nav-link" href="#trouble"><span class="num">10</span>排障</a>
+        </nav>
+    </aside>
+
+    <main class="manual">
+
+        <header class="manual-hero">
+            <div>
+                <span class="hero-badge">使用说明书</span>
+                <h1>801课件上传</h1>
+                <div class="lead">局域网课件上传与管理工具</div>
+                <div class="hero-actions">
+                    <a href="/" class="btn btn-primary btn-sm">
+                        <i class="bi bi-box-arrow-in-left"></i> 返回上传页面
+                    </a>
+                    <a href="#start" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-rocket-takeoff"></i> 快速开始
+                    </a>
+                </div>
+            </div>
+            <div class="hero-art" aria-hidden="true">
+                <div class="art-stack">
+                    <div class="art-chip art-chip-1"><i class="bi bi-file-earmark-pdf-fill"></i>讲义.pdf</div>
+                    <div class="art-chip art-chip-2"><i class="bi bi-file-earmark-slides-fill"></i>第一讲.pptx</div>
+                    <div class="art-chip art-chip-3"><i class="bi bi-file-earmark-zip-fill"></i>素材.zip</div>
+                    <div class="art-zone">
+                        <i class="bi bi-cloud-arrow-up-fill"></i>
+                        <span>松手上传</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <h2 id="intro"><span class="step">1</span>简介</h2>
+        <p>801 课件上传工具在一台电脑上启动后，会开启一个本地网页服务。同一局域网内的手机、平板、其他电脑打开该网页，就可以把课件直接上传到这台电脑的指定目录，也可以浏览、重命名、删除、预览文件，以及整文件夹打包下载。</p>
+        <p>电脑端程序负责添加目录、启动服务和系统级设置；网页端负责日常上传和管理。</p>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <i class="bi bi-cloud-arrow-up"></i>
+                <h6>局域网上传</h6>
+                <p>手机、平板、电脑扫码或输入地址即可上传，支持整个文件夹拖拽。</p>
+            </div>
+            <div class="feature-card">
+                <i class="bi bi-folder2-open"></i>
+                <h6>文件管理</h6>
+                <p>浏览、预览、重命名、删除、新建文件夹，文件夹可打包下载。</p>
+            </div>
+            <div class="feature-card">
+                <i class="bi bi-display"></i>
+                <h6>屏幕控制</h6>
+                <p>在网页里查看并操作服务端电脑，远程切 PPT、点下一页。</p>
+            </div>
+            <div class="feature-card">
+                <i class="bi bi-people"></i>
+                <h6>讲者名单模式</h6>
+                <p>按讲者自动分文件夹归档，状况截图核对谁还没传。</p>
+            </div>
+        </div>
+
+        <h2 id="start"><span class="step">2</span>快速开始</h2>
+        <ol class="quick-steps">
+            <li><span class="qs-num">1</span><div>在要保存课件的电脑上打开「801课件上传工具」。</div></li>
+            <li><span class="qs-num">2</span><div>点击右上角的「添加目录」，选择课件保存文件夹，可重复添加多个目录。</div></li>
+            <li><span class="qs-num">3</span><div>记下窗口里显示的「上传地址」，例如 <code>http://192.168.1.20:41004/</code>。</div></li>
+            <li><span class="qs-num">4</span><div>手机或其他电脑连接<strong>同一个局域网</strong>，在浏览器输入该地址；也可以直接点二维码按钮，用手机扫码访问。</div></li>
+            <li><span class="qs-num">5</span><div>如果设置了访问密码，先输入密码登录。</div></li>
+            <li><span class="qs-num">6</span><div>点「上传」选择文件，或把文件、文件夹直接拖进网页，即可开始上传。</div></li>
+        </ol>
+
+        <h2 id="desktop"><span class="step">3</span>电脑端程序</h2>
+        <figure class="manual-figure">
+            <svg viewBox="0 0 760 300" class="mock-svg" role="img" aria-label="电脑端程序界面示意图">
+                <rect x="10" y="10" width="740" height="280" rx="14" fill="var(--bs-body-bg)" stroke="var(--bs-border-color)" stroke-width="2"/>
+                <circle cx="34" cy="36" r="5" fill="var(--bs-danger)"/>
+                <circle cx="52" cy="36" r="5" fill="var(--bs-warning)"/>
+                <circle cx="70" cy="36" r="5" fill="var(--bs-success)"/>
+                <text x="90" y="42" font-size="15" font-weight="700" fill="var(--bs-body-color)">801课件上传工具</text>
+                <rect x="446" y="22" width="88" height="30" rx="8" fill="var(--bs-secondary-bg)" stroke="var(--bs-border-color)"/>
+                <text x="490" y="42" font-size="13" text-anchor="middle" fill="var(--bs-body-color)">说明书</text>
+                <rect x="542" y="22" width="96" height="30" rx="8" fill="var(--bs-primary)"/>
+                <text x="590" y="42" font-size="13" text-anchor="middle" fill="#fff">添加目录</text>
+                <rect x="646" y="22" width="76" height="30" rx="8" fill="var(--bs-secondary-bg)" stroke="var(--bs-border-color)"/>
+                <text x="684" y="42" font-size="13" text-anchor="middle" fill="var(--bs-body-color)">设置</text>
+                <text x="32" y="86" font-size="12" fill="var(--bs-secondary-color)">上传地址：</text>
+                <text x="100" y="86" font-size="12" fill="var(--bs-primary)">http://192.168.1.20:41004/</text>
+                <rect x="382" y="74" width="26" height="20" rx="5" fill="var(--bs-secondary-bg)"/>
+                <rect x="416" y="74" width="26" height="20" rx="5" fill="var(--bs-secondary-bg)"/>
+                <rect x="450" y="74" width="26" height="20" rx="5" fill="var(--bs-secondary-bg)"/>
+                <rect x="32" y="106" width="696" height="66" rx="10" fill="var(--bs-tertiary-bg)" stroke="var(--bs-border-color)"/>
+                <rect x="48" y="122" width="34" height="34" rx="8" fill="var(--bs-primary-bg-subtle)"/>
+                <rect x="58" y="130" width="14" height="9" rx="2" fill="var(--bs-primary)"/>
+                <rect x="58" y="134" width="26" height="16" rx="3" fill="var(--bs-primary)"/>
+                <text x="96" y="134" font-size="13" font-weight="600" fill="var(--bs-body-color)">D:\课件\2026春季</text>
+                <text x="96" y="154" font-size="11" fill="var(--bs-secondary-color)">128 个文件 · 2.4 GB</text>
+                <rect x="32" y="184" width="696" height="66" rx="10" fill="var(--bs-tertiary-bg)" stroke="var(--bs-border-color)"/>
+                <rect x="48" y="200" width="34" height="34" rx="8" fill="var(--bs-warning-bg-subtle)"/>
+                <rect x="58" y="208" width="14" height="9" rx="2" fill="var(--bs-warning)"/>
+                <rect x="58" y="212" width="26" height="16" rx="3" fill="var(--bs-warning)"/>
+                <text x="96" y="212" font-size="13" font-weight="600" fill="var(--bs-body-color)">E:\培训资料</text>
+                <text x="96" y="232" font-size="11" fill="var(--bs-secondary-color)">存档目录 · 只读查看</text>
+            </svg>
+            <figcaption>示意图：电脑端主窗口，右侧为说明书、添加目录与设置按钮</figcaption>
+        </figure>
+        <table class="table table-sm table-striped table-hover manual-table">
+            <thead><tr><th style="width:34%">按钮</th><th>作用</th></tr></thead>
+            <tbody>
+            <tr><td>添加目录</td><td>选择本机文件夹作为课件目录，可添加多个；目录会显示在网页顶部标签和左侧目录树。</td></tr>
+            <tr><td>设置</td><td>调整并发上传数、文件白名单、访问密码、隐藏文件显示、屏幕控制开关，查看并清理上传缓存。</td></tr>
+            <tr><td>说明书</td><td>打开本说明书。</td></tr>
+            <tr><td>复制</td><td>复制当前上传地址，方便发给其他设备。</td></tr>
+            <tr><td>刷新</td><td>重新检测本机局域网地址（IP 变化后使用）。</td></tr>
+            <tr><td>二维码</td><td>弹出上传地址二维码，手机扫码即可打开网页。</td></tr>
+            <tr><td>屏幕控制</td><td>开启后在网页里可以通过「屏幕控制」查看并操作这台电脑（需在设置中保持开启）。</td></tr>
+            </tbody>
+        </table>
+        <p>关闭程序窗口后程序会收进右下角托盘继续运行；要彻底退出，右键托盘图标选择「退出程序」。若有上传任务正在执行，退出前会再次确认。</p>
+
+        <h2 id="upload"><span class="step">4</span>上传文件</h2>
+        <h3>两种上传方式</h3>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <i class="bi bi-upload"></i>
+                <h6>按钮选择</h6>
+                <p>点右上角「上传」按钮，选择一个或多个文件。</p>
+            </div>
+            <div class="feature-card">
+                <i class="bi bi-hand-index-thumb"></i>
+                <h6>拖拽上传</h6>
+                <p>把文件或整个文件夹拖进网页，出现「松手上传」提示后松手；文件夹结构会保留。</p>
+            </div>
+        </div>
+        <figure class="manual-figure">
+            <svg viewBox="0 0 760 280" class="mock-svg" role="img" aria-label="上传队列示意图">
+                <rect x="10" y="10" width="740" height="260" rx="14" fill="var(--bs-body-bg)" stroke="var(--bs-border-color)" stroke-width="2"/>
+                <text x="34" y="46" font-size="14" font-weight="700" fill="var(--bs-body-color)">上传队列</text>
+                <text x="112" y="46" font-size="11" fill="var(--bs-secondary-color)">3 个文件 · 共 86 MB</text>
+                <rect x="600" y="30" width="56" height="24" rx="6" fill="var(--bs-secondary-bg)"/>
+                <text x="628" y="47" font-size="11" text-anchor="middle" fill="var(--bs-secondary-color)">收起</text>
+                <rect x="664" y="30" width="56" height="24" rx="6" fill="var(--bs-secondary-bg)"/>
+                <text x="692" y="47" font-size="11" text-anchor="middle" fill="var(--bs-secondary-color)">清空</text>
+                <rect x="28" y="66" width="704" height="56" rx="10" fill="var(--bs-tertiary-bg)"/>
+                <rect x="44" y="80" width="20" height="26" rx="3" fill="var(--bs-danger)"/>
+                <path d="M58 80 l6 6 h-6 z" fill="rgba(255,255,255,.45)"/>
+                <text x="78" y="92" font-size="13" fill="var(--bs-body-color)">讲义.pdf</text>
+                <rect x="78" y="100" width="380" height="6" rx="3" fill="var(--bs-secondary-bg)"/>
+                <rect x="78" y="100" width="380" height="6" rx="3" fill="var(--bs-success)"/>
+                <text x="474" y="106" font-size="11" fill="var(--bs-success-text-emphasis)">100% · 已完成</text>
+                <rect x="28" y="130" width="704" height="56" rx="10" fill="var(--bs-tertiary-bg)"/>
+                <rect x="44" y="144" width="20" height="26" rx="3" fill="var(--bs-warning)"/>
+                <path d="M58 144 l6 6 h-6 z" fill="rgba(255,255,255,.45)"/>
+                <text x="78" y="156" font-size="13" fill="var(--bs-body-color)">第一讲.pptx</text>
+                <rect x="78" y="164" width="380" height="6" rx="3" fill="var(--bs-secondary-bg)"/>
+                <rect x="78" y="164" width="248" height="6" rx="3" fill="var(--bs-primary)"/>
+                <text x="474" y="170" font-size="11" fill="var(--bs-primary-text-emphasis)">68% · 2.4 MB/s</text>
+                <rect x="28" y="194" width="704" height="56" rx="10" fill="var(--bs-tertiary-bg)"/>
+                <rect x="44" y="208" width="20" height="26" rx="3" fill="var(--bs-purple)"/>
+                <path d="M58 208 l6 6 h-6 z" fill="rgba(255,255,255,.45)"/>
+                <text x="78" y="220" font-size="13" fill="var(--bs-body-color)">素材.zip</text>
+                <rect x="78" y="228" width="380" height="6" rx="3" fill="var(--bs-secondary-bg)"/>
+                <text x="474" y="234" font-size="11" fill="var(--bs-secondary-color)">等待中</text>
+            </svg>
+            <figcaption>示意图：上传队列显示进度、速度与成功/失败状态</figcaption>
+        </figure>
+        <h3>上传队列</h3>
+        <ul>
+            <li>页面底部显示上传队列：进度、速度、成功/失败状态。可单独取消某个文件。</li>
+            <li>「清除已完成」只清掉已完成记录；「清空记录」清空整个列表（不会删除已上传文件）。</li>
+            <li>上传面板可以收起，减少遮挡。</li>
+        </ul>
+        <h3>同名与重复文件</h3>
+        <ul>
+            <li>目标目录已有同名文件时，会弹出「同名文件」对话框，可选 <strong>覆盖</strong>、<strong>改名保存</strong> 或 <strong>跳过</strong>。</li>
+            <li>如果新上传文件与已有文件内容完全相同（哈希一致），会提示「重复文件」，可选 <strong>改名保存</strong> 或 <strong>跳过</strong>。</li>
+            <li>勾选「后续文件保持一致」后，本次操作中遇到同类情况会按同一选择自动处理。</li>
+        </ul>
+        <h3>文件类型限制</h3>
+        <div class="alert alert-warning d-flex gap-2 align-items-start" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <div>只有白名单内的扩展名允许上传和显示。默认包含文档、表格、演示、PDF、图片、音视频、压缩包和网页等常见格式；需要增加或减少类型，在电脑端「设置 → 文件白名单」里修改（逗号分隔）。</div>
+        </div>
+
+        <h2 id="manage"><span class="step">5</span>文件与文件夹管理</h2>
+        <ul>
+            <li><strong>目录切换</strong>：顶部标签切换课件目录。</li>
+            <li><strong>浏览</strong>：左侧目录树和面包屑可进入子文件夹；支持按时间、名称、大小排序和分页。</li>
+            <li><strong>预览</strong>：图片、视频、音频等可直接在网页中预览。</li>
+            <li><strong>打开</strong>：让服务端电脑用默认程序打开该文件（适合上课时直接投屏）。</li>
+            <li><strong>重命名 / 删除</strong>：对文件或文件夹操作。删除会移入服务端电脑的回收站，可到回收站找回。</li>
+            <li><strong>新建文件夹</strong>：在当前位置新建；也可对文件夹重命名、删除。</li>
+            <li><strong>打包下载</strong>：文件夹可打包成压缩包下载，底部「下载队列」显示进度，完成后自动开始下载；可清空下载记录。</li>
+            <li><strong>磁盘空间</strong>：顶栏磁盘按钮可查看各磁盘剩余空间，顶栏进度条显示占用/剩余概览。</li>
+        </ul>
+
+        <h2 id="roster"><span class="step">6</span>讲者名单模式</h2>
+        <ol class="quick-steps">
+            <li><span class="qs-num">1</span><div>打开工具栏的「讲者名单模式」开关。</div></li>
+            <li><span class="qs-num">2</span><div>编辑名单：每行一个名字，保存后生效。</div></li>
+            <li><span class="qs-num">3</span><div>之后上传文件时，会先选择讲者，上传内容自动放进以该讲者命名的子文件夹。</div></li>
+            <li><span class="qs-num">4</span><div>「状况截图」按钮会把名单与每个名字的文件夹状态生成一张截图，可复制其中的文本，方便核对谁还没传。</div></li>
+        </ol>
+
+        <h2 id="screen"><span class="step">7</span>屏幕控制</h2>
+        <p>顶栏的「屏幕控制」按钮可查看并操作服务端电脑。它适合远程切 PPT、打开文件、点下一页等操作。</p>
+        <figure class="manual-figure">
+            <svg viewBox="0 0 760 300" class="mock-svg" role="img" aria-label="屏幕控制示意图">
+                <rect x="10" y="10" width="740" height="280" rx="14" fill="var(--bs-body-bg)" stroke="var(--bs-border-color)" stroke-width="2"/>
+                <text x="34" y="42" font-size="14" font-weight="700" fill="var(--bs-body-color)">屏幕控制：电脑A</text>
+                <text x="520" y="42" font-size="11" fill="var(--bs-secondary-color)">30 帧 · 28 ms</text>
+                <rect x="600" y="26" width="70" height="24" rx="6" fill="var(--bs-secondary-bg)" stroke="var(--bs-border-color)"/>
+                <text x="635" y="43" font-size="11" text-anchor="middle" fill="var(--bs-body-color)">差分</text>
+                <rect x="678" y="26" width="56" height="24" rx="6" fill="var(--bs-secondary-bg)" stroke="var(--bs-border-color)"/>
+                <text x="706" y="43" font-size="11" text-anchor="middle" fill="var(--bs-body-color)">全屏</text>
+                <rect x="26" y="62" width="708" height="214" rx="8" fill="var(--bs-dark)" opacity=".92"/>
+                <rect x="64" y="92" width="632" height="154" rx="4" fill="var(--bs-body-bg)"/>
+                <text x="94" y="130" font-size="17" font-weight="700" fill="var(--bs-body-color)">第三讲 · 数据结构</text>
+                <rect x="94" y="150" width="300" height="7" rx="3" fill="var(--bs-secondary-bg)"/>
+                <rect x="94" y="168" width="380" height="7" rx="3" fill="var(--bs-secondary-bg)"/>
+                <rect x="94" y="186" width="250" height="7" rx="3" fill="var(--bs-secondary-bg)"/>
+                <rect x="94" y="204" width="330" height="7" rx="3" fill="var(--bs-secondary-bg)"/>
+                <circle cx="486" cy="196" r="22" fill="none" stroke="var(--bs-primary)" stroke-width="2" stroke-dasharray="4 5" opacity=".8"/>
+                <circle cx="486" cy="196" r="10" fill="none" stroke="var(--bs-primary)" stroke-width="2" opacity=".5"/>
+                <path d="M484 190 v34 l9 -9 6 12 6 -3 -6 -12 12 -1 z" fill="var(--bs-primary)"/>
+            </svg>
+            <figcaption>示意图：屏幕控制弹窗，可切换显示器与传输方式，鼠标点击直达被控电脑</figcaption>
+        </figure>
+        <ul>
+            <li><strong>显示器</strong>：多显示器时可在标题栏左侧下拉选择。</li>
+            <li><strong>传输方式</strong>：<code>差分</code> 延迟最低、<code>MJPEG</code> 兼容性好、<code>WebRTC</code> 画质与流畅度均衡；卡顿时可切换试试。</li>
+            <li><strong>鼠标</strong>：支持单击、右键、按住拖动。</li>
+            <li><strong>键盘</strong>：弹窗处于打开状态时，键盘和快捷键会转发到被控电脑（如 Esc、方向键、Ctrl 组合键）；点标题栏的「查看快捷键」可查看全部可用按键。</li>
+            <li><strong>最大化</strong>：用右上角最大化按钮切换全屏显示。</li>
+            <li><strong>最小化</strong>：缩成网页里的小浮窗，浮窗只做预览，提示「请展开使用」；点展开按钮回到控制弹窗，点关闭则彻底断开控制。</li>
+        </ul>
+        <p>注意：浏览器占用的一些系统级快捷键（如 Ctrl+W、Ctrl+T、Ctrl+N、Alt+F4、Windows 键）无法转发给被控电脑，这是浏览器限制。</p>
+
+        <h2 id="settings"><span class="step">8</span>设置项说明</h2>
+        <table class="table table-sm table-striped table-hover manual-table">
+            <thead><tr><th style="width:30%">设置</th><th>说明</th></tr></thead>
+            <tbody>
+            <tr><td>并发上传数</td><td>同时上传的文件数量，默认 3。网络好可适当调高，网络差或设备多时调低更稳。</td></tr>
+            <tr><td>文件白名单</td><td>允许的扩展名，逗号分隔；不在列表中的文件不会显示、不能上传。</td></tr>
+            <tr><td>访问密码</td><td>设置后打开网页需登录；留空保存表示无密码。忘记密码可直接在这里重设。</td></tr>
+            <tr><td>显示隐藏文件</td><td>是否在网页列表中显示以点开头的隐藏文件。</td></tr>
+            <tr><td>屏幕控制</td><td>关闭后网页不再显示屏幕控制入口。</td></tr>
+            <tr><td>上传缓存</td><td>上传过程中的临时文件缓存，显示当前占用，可点「清理」释放；不影响已上传完成的文件。</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="data"><span class="step">9</span>数据与删除</h2>
+        <ul>
+            <li>程序数据（配置、索引、上传缓存）位于程序目录下的 <code>data</code> 文件夹，不会写到系统盘临时目录。</li>
+            <li>被删除的文件和文件夹会进入 Windows 回收站，可在回收站找回。</li>
+            <li>配置保存在 <code>data/config.json</code>；如无特殊需要，不建议手动修改。</li>
+        </ul>
+
+        <h2 id="trouble"><span class="step">10</span>排障</h2>
+        <div class="accordion accordion-flush manual-accordion" id="troubleAcc">
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq1">
+                        手机或其他电脑打不开上传地址
+                    </button>
+                </h3>
+                <div id="tq1" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>确认两台设备连接的是同一个局域网（同一路由器 / 同一 WiFi，不能一台连 WiFi 一台连热点）。</li>
+                            <li>确认电脑端程序正在运行，窗口里显示的是可用上传地址而不是「服务未启动」。</li>
+                            <li>首次运行程序时如弹出管理员授权（UAC），必须点「是」，否则局域网访问和防火墙规则无法生效。</li>
+                            <li>IP 变化后点电脑端「刷新」按钮，再重新获取地址或二维码。</li>
+                            <li>公司或校园网络可能启用了「设备隔离 / AP 隔离」，会禁止设备互访，请联系网管放行。</li>
+                            <li>如果开了 VPN、虚拟网卡或多个网卡，可能拿到错误 IP，可临时关闭 VPN 后刷新地址。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq2">
+                        提示「服务未启动」或端口无法使用
+                    </button>
+                </h3>
+                <div id="tq2" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>默认端口是 41004，可能被其他程序占用；关闭占用该端口的程序后重启本程序。</li>
+                            <li>防火墙或安全软件可能拦截，首次运行请允许程序通过防火墙。</li>
+                            <li>极端情况下可修改 <code>data/config.json</code> 中的 <code>Port</code> 后重启；重启时若提示管理员授权请同意，以便重新注册端口与防火墙。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq3">
+                        网页一直停在登录页 / 提示登录已失效
+                    </button>
+                </h3>
+                <div id="tq3" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>输入电脑端当前设置的访问密码；忘记密码就在电脑端「设置」里重新设置（留空即取消密码）。</li>
+                            <li>密码修改后，已打开的旧页面需要重新登录。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq4">
+                        上传失败或上传很慢
+                    </button>
+                </h3>
+                <div id="tq4" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>先确认服务端电脑磁盘空间充足（顶栏磁盘按钮查看）。</li>
+                            <li>确认文件扩展名在白名单内，否则不会允许上传。</li>
+                            <li>大文件、WiFi 信号弱、多设备同时上传都可能导致慢或中断；可降低「并发上传数」，改用有线网络重试。</li>
+                            <li>文件正被其他程序占用（如正在播放的视频）时可能读写失败，关闭占用程序后再传。</li>
+                            <li>重新上传同名文件时选择「覆盖」或「改名保存」，避免因「跳过」误以为上传成功。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq5">
+                        拖拽文件没有反应
+                    </button>
+                </h3>
+                <div id="tq5" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>请把文件拖到网页内容区域内再松手，页面出现「松手上传」提示后才有效。</li>
+                            <li>部分浏览器对拖拽文件夹支持有限，可改用「上传」按钮选择文件夹。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq6">
+                        打包下载失败或一直不完成
+                    </button>
+                </h3>
+                <div id="tq6" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>文件夹过大时需要先压缩，耗时较长；保持页面打开，等下载队列完成。</li>
+                            <li>确认服务端磁盘有足够剩余空间。</li>
+                            <li>可取消后重试；反复失败时先删减文件夹内容或分次下载。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq7">
+                        屏幕控制黑屏、卡顿或鼠标不动
+                    </button>
+                </h3>
+                <div id="tq7" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>被控电脑处于锁屏或息屏时无法截取画面，请先解锁并保持屏幕点亮。</li>
+                            <li>在标题栏切换传输方式（差分 / MJPEG / WebRTC）试试；全屏高分辨率下可适当降低窗口大小。</li>
+                            <li>WebRTC 依赖 UDP 通信，若被防火墙拦截会自动回退，必要时在电脑端防火墙放行程序。</li>
+                            <li>多显示器时确认选择的是正在显示内容的那个显示器。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq8">
+                        屏幕控制里键盘没反应
+                    </button>
+                </h3>
+                <div id="tq8" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>浏览器保留的系统快捷键无法转发（Ctrl+W、Ctrl+T、Ctrl+N、Alt+F4、Windows 键等），请在被控电脑上直接操作这些键。</li>
+                            <li>中文输入需要在被控电脑上切换到中文输入法，网页只负责转发按键。</li>
+                            <li>输入焦点在网页输入框里时不会转发按键，先点一下画面再按键。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq9">
+                        二维码扫不出来
+                    </button>
+                </h3>
+                <div id="tq9" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>把手机相机对准二维码并保持稳定，或直接用浏览器手动输入上传地址。</li>
+                            <li>确认扫码设备与服务端电脑在同一局域网。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tq10">
+                        双击程序没反应 / 找不到窗口
+                    </button>
+                </h3>
+                <div id="tq10" class="accordion-collapse collapse" data-bs-parent="#troubleAcc">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>程序是单实例运行，可能已经在右下角托盘里；双击托盘图标即可打开主界面。</li>
+                            <li>要彻底退出，右键托盘图标选「退出程序」。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2>关于</h2>
+        <div class="about-card">
+            <div class="about-avatar"><i class="bi bi-person-heart"></i></div>
+            <div>
+                <div class="about-name">开发者：明灯花月夜</div>
+                <a class="about-link" href="https://mdhyy.cn" target="_blank" rel="noopener">网址：mdhyy.cn</a>
+            </div>
+        </div>
+
+        <div class="footer">801课件上传 · 使用说明书</div>
+
+    </main>
+</div>
+
+<a class="back-top btn btn-primary" href="#top" id="backTop" title="回到顶部" aria-label="回到顶部">
+    <i class="bi bi-arrow-up"></i>
+</a>
+
+<script src="/vendor/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+    var backTop = document.getElementById('backTop');
+    function onScroll() {
+        var y = window.scrollY || document.documentElement.scrollTop || 0;
+        backTop.classList.toggle('show', y > 480);
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+})();
+</script>
+</body>
+</html>

@@ -25,18 +25,27 @@
     <div class="brand">
         <i class="bi bi-cloud-arrow-up-fill"></i>
         <span>801课件上传</span>
+        <span class="brand-version" id="brandVersion"></span>
         <button type="button" class="btn btn-sm qr-btn" id="btnQr" title="二维码">
             <i class="bi bi-qr-code"></i>
         </button>
     </div>
     <div class="conn-state">
-        <span>服务器连接状态</span>
+        <span id="connText">服务器连接状态：未连接</span>
         <span class="conn-dot" id="connDot" title="未连接"></span>
+        <span class="conn-info" id="connInfo"></span>
         <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnDiskSpace" title="磁盘空间">
             <i class="bi bi-hdd"></i>
         </button>
+        <span class="disk-meter d-none" id="diskMeter">
+            <span class="disk-meter-track"><span class="disk-meter-used" id="diskMeterUsed"></span></span>
+            <span class="disk-meter-text" id="diskMeterText"></span>
+        </span>
     </div>
     <div class="topbar-right">
+        <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnScreen" title="屏幕控制">
+            <i class="bi bi-display"></i>
+        </button>
         <button type="button" class="btn btn-primary btn-sm" id="btnPick">
             <i class="bi bi-upload"></i> 上传
         </button>
@@ -218,6 +227,100 @@
             <div class="modal-body">
                 <div id="diskList"></div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="screenModal" tabindex="-1" aria-hidden="true" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="screenTitle">屏幕控制</h5>
+                <div class="screen-tools">
+                    <span id="screenStats" class="screen-stats"></span>
+                    <select class="form-select form-select-sm" id="screenSelect" title="显示器"></select>
+                    <div class="dropdown screen-transport">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="screenTransportBtn" data-bs-toggle="dropdown" aria-expanded="false" title="传输方式">
+                            <span id="screenTransportLabel">MJPEG</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end screen-transport-menu" id="screenTransportMenu" aria-labelledby="screenTransportBtn">
+                            <li><a class="dropdown-item" href="#" data-transport="mjpeg">
+                                <span class="transport-name">MJPEG</span>
+                                <span class="transport-desc">画质清晰、兼容性最好，持续占用带宽较大</span>
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" data-transport="diff">
+                                <span class="transport-name">差分</span>
+                                <span class="transport-desc">延迟最低，画面静止时省带宽，画面一动带宽占用最大</span>
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" data-transport="rtc">
+                                <span class="transport-name">WebRTC</span>
+                                <span class="transport-desc">画质流畅均衡、带宽相对可控，首次连接稍慢</span>
+                            </a></li>
+                        </ul>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="screenKeyHelp" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="查看快捷键">查看快捷键</button>
+                        <ul class="dropdown-menu dropdown-menu-end screen-keyhelp" id="screenKeyHelpMenu" aria-labelledby="screenKeyHelp">
+                            <li class="keyhelp-section">
+                                <div class="keyhelp-title">普通按键</div>
+                                <div class="keyhelp-tags">
+                                    <kbd>A - Z</kbd><kbd>0 - 9</kbd><kbd>F1 - F12</kbd><kbd>小键盘 0 - 9</kbd>
+                                    <kbd>Esc</kbd><kbd>Tab</kbd><kbd>Enter</kbd><kbd>空格</kbd>
+                                    <kbd>Backspace</kbd><kbd>Delete</kbd><kbd>Insert</kbd>
+                                    <kbd>Home</kbd><kbd>End</kbd><kbd>PgUp</kbd><kbd>PgDn</kbd><kbd>方向键</kbd>
+                                    <kbd>CapsLock</kbd><kbd>NumLock</kbd><kbd>ScrollLock</kbd><kbd>PrintScreen</kbd><kbd>Pause</kbd><kbd>Menu</kbd>
+                                    <kbd>符号键</kbd>
+                                </div>
+                            </li>
+                            <li class="keyhelp-section">
+                                <div class="keyhelp-title">组合键</div>
+                                <div class="keyhelp-row"><span class="keys"><kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd> / <kbd>X</kbd> / <kbd>Z</kbd> / <kbd>A</kbd></span><span class="desc">复制、粘贴、剪切、撤销、全选</span></div>
+                                <div class="keyhelp-row"><span class="keys"><kbd>Ctrl</kbd> + <kbd>S</kbd></span><span class="desc">保存</span></div>
+                                <div class="keyhelp-row"><span class="keys"><kbd>Ctrl</kbd> + <kbd>F</kbd></span><span class="desc">查找</span></div>
+                                <div class="keyhelp-row"><span class="keys"><kbd>Shift</kbd> + <kbd>方向键</kbd></span><span class="desc">选择文本 / 区域</span></div>
+                                <div class="keyhelp-row"><span class="keys"><kbd>Alt</kbd> + <kbd>Enter</kbd></span><span class="desc">查看属性</span></div>
+                            </li>
+                            <li class="keyhelp-note">浏览器占用的快捷键无法转发：Ctrl+W、Ctrl+T、Ctrl+N、Alt+Tab、Alt+F4、Win 键及组合，请在被控电脑上直接操作。</li>
+                        </ul>
+                    </div>
+                </div>
+                <button type="button" class="screen-window-btn" id="screenMinimize" title="最小化">
+                    <i class="bi bi-dash-lg"></i>
+                </button>
+                <button type="button" class="screen-window-btn" id="screenMaximize" title="最大化">
+                    <i class="bi bi-fullscreen"></i>
+                </button>
+                <button type="button" class="screen-window-btn screen-window-close" data-bs-dismiss="modal" aria-label="关闭" title="关闭">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body screen-body" id="screenBody">
+                <img id="screenImage" class="d-none" alt="屏幕画面" draggable="false">
+                <canvas id="screenCanvas" class="d-none"></canvas>
+                <video id="screenVideo" class="d-none" autoplay muted playsinline></video>
+                <div class="screen-loading d-none" id="screenLoading">
+                    <div class="screen-loading-blur" id="screenLoadingBlur"></div>
+                    <span class="screen-loading-text">正在加载画面</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="screen-float d-none" id="screenFloat">
+    <div class="screen-float-bar" id="screenFloatBar">
+        <span class="screen-float-title" id="screenFloatTitle">屏幕控制</span>
+        <button type="button" class="screen-float-btn" id="screenFloatExpand" title="展开">
+            <i class="bi bi-arrows-angle-expand"></i>
+        </button>
+        <button type="button" class="screen-float-btn" id="screenFloatClose" title="关闭">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div class="screen-float-body" id="screenFloatBody">
+        <div class="screen-float-hint">
+            <span class="screen-float-hint-blur" aria-hidden="true"></span>
+            <span class="screen-float-hint-text">请展开使用</span>
         </div>
     </div>
 </div>

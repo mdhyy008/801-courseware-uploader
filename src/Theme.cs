@@ -27,6 +27,8 @@ namespace _801CoursewareUploader
         public static Font FontSmall;
         public static Font FontTitle;
         public static Font FontPageTitle;
+        public static Font FontEmptyTitle;
+        public static Font FontEmptyText;
 
         static Theme()
         {
@@ -34,6 +36,8 @@ namespace _801CoursewareUploader
             FontSmall = new Font("Microsoft YaHei UI", 8.5F);
             FontTitle = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold);
             FontPageTitle = new Font("Microsoft YaHei UI", 17F, FontStyle.Bold);
+            FontEmptyTitle = new Font("Microsoft YaHei UI", 20F, FontStyle.Bold);
+            FontEmptyText = new Font("Microsoft YaHei UI", 12.5F);
             Reload();
         }
 

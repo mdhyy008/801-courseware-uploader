@@ -37,10 +37,12 @@ namespace _801CoursewareUploader
         public string PasswordHash { get; set; }
         public int MaxConcurrent { get; set; }
         public bool ShowHiddenFiles { get; set; }
+        public bool ScreenControlEnabled { get; set; }
         public List<string> Whitelist { get; set; }
         public List<DirectoryEntry> Directories { get; set; }
         public List<RosterEntry> Rosters { get; set; }
         public bool LanPrompted { get; set; }
+        public bool RtcFirewall { get; set; }
         public List<int> RegisteredPorts { get; set; }
 
         public AppConfig()
@@ -49,6 +51,7 @@ namespace _801CoursewareUploader
             PasswordSalt = "";
             PasswordHash = "";
             MaxConcurrent = 3;
+            ScreenControlEnabled = true;
             Whitelist = DefaultWhitelist();
             Directories = new List<DirectoryEntry>();
             Rosters = new List<RosterEntry>();
@@ -110,6 +113,25 @@ namespace _801CoursewareUploader
     public sealed class IdRequest
     {
         public string Id { get; set; }
+    }
+
+    public sealed class ScreenClickRequest
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+    }
+
+    public sealed class ScreenPointerRequest
+    {
+        public string Action { get; set; }
+        public int X { get; set; }
+        public int Y { get; set; }
+    }
+
+    public sealed class RtcOfferRequest
+    {
+        public string Sdp { get; set; }
+        public int Screen { get; set; }
     }
 
     public sealed class FileOpRequest
