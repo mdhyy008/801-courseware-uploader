@@ -323,6 +323,16 @@ namespace _801CoursewareUploader
                 HandleScreenInfo(context);
                 return;
             }
+            if (string.Equals(path, "/api/screen/elevate", StringComparison.OrdinalIgnoreCase) && method == "POST")
+            {
+                if (!ScreenEnabled)
+                {
+                    WriteJson(context, 403, new { error = "屏幕控制已关闭" });
+                    return;
+                }
+                HandleScreenElevate(context);
+                return;
+            }
             if (string.Equals(path, "/api/screen/stats", StringComparison.OrdinalIgnoreCase) && method == "GET")
             {
                 if (!ScreenEnabled)
@@ -1403,7 +1413,72 @@ namespace _801CoursewareUploader
                     primary = screens[i].Primary
                 });
             }
-            WriteJson(context, 200, new { primary = primary, screens = list });
+            WriteJson(context, 200, new
+            {
+                primary = primary,
+                elevated = Native.IsElevated,
+                screens = list
+            });
+        }
+
+        private void HandleScreenElevate(HttpListenerContext context)
+        {
+            if (Native.IsElevated)
+            {
+                WriteJson(context, 200, new { ok = true, elevated = true });
+                return;
+            }
+            bool started;
+            System.Windows.Forms.Form form =
+                System.Windows.Forms.Application.OpenForms.Count > 0
+                    ? System.Windows.Forms.Application.OpenForms[0]
+                    : null;
+            if (form == null)
+            {
+                started = Native.RestartElevated();
+            }
+            else
+            {
+                try
+                {
+                    started = (bool)form.Invoke(new Func<bool>(Native.RestartElevated));
+                }
+                catch
+                {
+                    started = false;
+                }
+            }
+            if (!started)
+            {
+                WriteJson(context, 500, new { ok = false, error = "未能以管理员身份启动" });
+                return;
+            }
+
+            WriteJson(context, 200, new { ok = true, restarting = true });
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                Thread.Sleep(800);
+                System.Windows.Forms.Form target =
+                    System.Windows.Forms.Application.OpenForms.Count > 0
+                        ? System.Windows.Forms.Application.OpenForms[0]
+                        : null;
+                if (target == null)
+                {
+                    System.Windows.Forms.Application.Exit();
+                    return;
+                }
+                try
+                {
+                    target.BeginInvoke(new System.Windows.Forms.MethodInvoker(delegate
+                    {
+                        System.Windows.Forms.Application.Exit();
+                    }));
+                }
+                catch
+                {
+                    System.Windows.Forms.Application.Exit();
+                }
+            });
         }
 
         private void RecordScreenBytes(string kind, int index, int bytes, int frames)

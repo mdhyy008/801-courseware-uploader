@@ -1,8 +1,10 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text;
 using System.Windows.Forms;
 
@@ -79,6 +81,41 @@ namespace _801CoursewareUploader
             {
             }
             return SystemIcons.Application;
+        }
+
+        public static bool IsElevated
+        {
+            get
+            {
+                try
+                {
+                    using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
+                        return new WindowsPrincipal(identity).IsInRole(
+                            WindowsBuiltInRole.Administrator);
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        public static bool RestartElevated()
+        {
+            try
+            {
+                ProcessStartInfo info = new ProcessStartInfo();
+                info.FileName = Application.ExecutablePath;
+                info.Arguments = "--restarted";
+                info.UseShellExecute = true;
+                info.Verb = "runas";
+                Process.Start(info);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static void CenterOnScreen(Form form)

@@ -1181,7 +1181,10 @@
     var deviceName = '';
 
     function applyScreenTitle() {
-        var title = '屏幕控制' + (deviceName ? '：' + deviceName : '');
+        var mode = '';
+        if (screenInfo) mode = screenInfo.elevated === true ? '管理员' : '普通';
+        var title = '屏幕控制' + (mode ? '（' + mode + '）' : '') +
+            (deviceName ? '：' + deviceName : '');
         var modalTitle = $('screenTitle');
         if (modalTitle) modalTitle.textContent = title;
         var floatTitle = $('screenFloatTitle');
@@ -1572,6 +1575,8 @@
         applyScreenTitle();
         getJson('/api/screen/info').then(function (info) {
             screenInfo = info;
+            applyScreenTitle();
+            $('screenElevate').classList.toggle('d-none', info.elevated !== false);
             var select = $('screenSelect');
             select.innerHTML = '';
             var screens = info.screens || [];
@@ -1590,6 +1595,39 @@
             modal('screenModal').show();
         }).catch(function (err) {
             toast(err.message || '无法获取屏幕');
+        });
+    }
+
+    var screenElevating = false;
+
+    function resetScreenElevateButton() {
+        var button = $('screenElevateBtn');
+        button.disabled = false;
+        button.textContent = '提权重启';
+    }
+
+    function requestScreenElevate() {
+        if (screenElevating) return;
+        screenElevating = true;
+        var button = $('screenElevateBtn');
+        button.disabled = true;
+        button.textContent = '提权中';
+        toast('已发送提权请求，请在被控电脑上点「是」');
+        postJson('/api/screen/elevate', {}).then(function (res) {
+            if (res.elevated) {
+                screenElevating = false;
+                resetScreenElevateButton();
+                $('screenElevate').classList.add('d-none');
+                return;
+            }
+            if (!res.ok) throw new Error(res.error || '提权失败');
+            stopTransport();
+            toast('已提权，5 秒后自动刷新页面');
+            setTimeout(function () { location.href = '/'; }, 5000);
+        }).catch(function (err) {
+            screenElevating = false;
+            resetScreenElevateButton();
+            toast(err.message || '提权失败');
         });
     }
 
@@ -3544,6 +3582,7 @@
         $('btnDiskSpace').addEventListener('click', function () { showDiskSpace(); });
 
         $('btnScreen').addEventListener('click', function () { openScreen(); });
+        $('screenElevateBtn').addEventListener('click', function () { requestScreenElevate(); });
         $('screenSelect').addEventListener('change', function () {
             selectScreen(parseInt(this.value, 10));
         });

@@ -1070,6 +1070,21 @@ button {
     color: var(--bs-secondary-color);
 }
 
+.screen-elevate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+    padding: .35rem .9rem;
+    font-size: .8rem;
+    line-height: 1.45;
+    text-align: center;
+    color: var(--bs-warning-text-emphasis);
+    background: var(--bs-warning-bg-subtle);
+    border-bottom: 1px solid rgba(127, 127, 127, .25);
+}
+
 .screen-body {
     position: relative;
     display: flex;

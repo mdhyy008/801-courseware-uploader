@@ -16,13 +16,29 @@ namespace _801CoursewareUploader
                 return;
             }
 
+            bool restarted = args != null && Array.IndexOf(args, "--restarted") >= 0;
             bool createdNew;
             using (Mutex mutex = new Mutex(true, "801CoursewareUploader.SingleInstance", out createdNew))
             {
                 if (!createdNew)
                 {
-                    Native.ActivateExistingWindow("801课件上传工具");
-                    return;
+                    if (!restarted)
+                    {
+                        Native.ActivateExistingWindow("801课件上传工具");
+                        return;
+                    }
+                    try
+                    {
+                        if (!mutex.WaitOne(TimeSpan.FromSeconds(30)))
+                        {
+                            MessageBox.Show("未能接管正在运行的程序，请手动退出旧实例后重试。",
+                                "管理员权限", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                    }
+                    catch (AbandonedMutexException)
+                    {
+                    }
                 }
 
                 AppPaths.Ensure();
@@ -32,7 +48,7 @@ namespace _801CoursewareUploader
 
                 EnsureLanAccess();
 
-                Application.Run(new MainForm());
+                Application.Run(new MainForm(restarted));
             }
         }
 

@@ -703,7 +703,7 @@
         <figure class="manual-figure">
             <svg viewBox="0 0 760 300" class="mock-svg" role="img" aria-label="屏幕控制示意图">
                 <rect x="10" y="10" width="740" height="280" rx="14" fill="var(--bs-body-bg)" stroke="var(--bs-border-color)" stroke-width="2"/>
-                <text x="34" y="42" font-size="14" font-weight="700" fill="var(--bs-body-color)">屏幕控制：电脑A</text>
+                <text x="34" y="42" font-size="14" font-weight="700" fill="var(--bs-body-color)">屏幕控制（管理员）：电脑A</text>
                 <text x="520" y="42" font-size="11" fill="var(--bs-secondary-color)">30 帧 · 28 ms</text>
                 <rect x="600" y="26" width="70" height="24" rx="6" fill="var(--bs-secondary-bg)" stroke="var(--bs-border-color)"/>
                 <text x="635" y="43" font-size="11" text-anchor="middle" fill="var(--bs-body-color)">差分</text>
@@ -729,8 +729,11 @@
             <li><strong>键盘</strong>：弹窗处于打开状态时，键盘和快捷键会转发到被控电脑（如 Esc、方向键、Ctrl 组合键）；点标题栏的「查看快捷键」可查看全部可用按键。</li>
             <li><strong>最大化</strong>：用右上角最大化按钮切换全屏显示。</li>
             <li><strong>最小化</strong>：缩成网页里的小浮窗，浮窗只做预览，提示「请展开使用」；点展开按钮回到控制弹窗，点关闭则彻底断开控制。</li>
+            <li><strong>权限模式</strong>：弹窗标题会显示当前权限，如「屏幕控制（管理员）：电脑A」。普通权限下，任务管理器等管理员窗口无法点击操作。</li>
+            <li><strong>远程提权</strong>：普通权限时弹窗顶部显示「提权重启」按钮。点击后被控电脑会弹出 UAC 确认，需在那台电脑上点「是」；程序会以管理员身份重启，网页 5 秒后自动刷新，重新登录后即可操作管理员窗口。取消确认则程序保持原样。</li>
         </ul>
         <p>注意：浏览器占用的一些系统级快捷键（如 Ctrl+W、Ctrl+T、Ctrl+N、Alt+F4、Windows 键）无法转发给被控电脑，这是浏览器限制。</p>
+        <p>提示：UAC 确认框、锁屏界面和 Ctrl+Alt+Del 由 Windows 单独保护，任何权限下都无法在网页中查看或操作。</p>
 
         <h2 id="settings"><span class="step">8</span>设置项说明</h2>
         <table class="table table-sm table-striped table-hover manual-table">
@@ -741,6 +744,7 @@
             <tr><td>访问密码</td><td>设置后打开网页需登录；留空保存表示无密码。忘记密码可直接在这里重设。</td></tr>
             <tr><td>显示隐藏文件</td><td>是否在网页列表中显示以点开头的隐藏文件。</td></tr>
             <tr><td>屏幕控制</td><td>关闭后网页不再显示屏幕控制入口。</td></tr>
+            <tr><td>管理员权限</td><td>显示当前是否以管理员运行；普通权限时可点「以管理员身份重启」，重启后才能操作任务管理器等管理员窗口。</td></tr>
             <tr><td>上传缓存</td><td>上传过程中的临时文件缓存，显示当前占用，可点「清理」释放；不影响已上传完成的文件。</td></tr>
             </tbody>
         </table>

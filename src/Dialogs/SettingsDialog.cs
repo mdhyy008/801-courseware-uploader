@@ -30,8 +30,10 @@ namespace _801CoursewareUploader
         private readonly FluentButton cancelButton;
         private readonly FluentButton saveButton;
         private readonly FluentButton clearCacheButton;
+        private readonly FluentButton elevateButton;
         private readonly LinkLabel sourceLink;
         private readonly LinkLabel releaseLink;
+        private readonly bool elevated;
 
         private readonly List<TextLine> textLines = new List<TextLine>();
         private readonly List<Rectangle> cards = new List<Rectangle>();
@@ -83,6 +85,14 @@ namespace _801CoursewareUploader
             screenToggle = new FluentToggle();
             screenToggle.Checked = snapshot.ScreenControlEnabled;
             Controls.Add(screenToggle);
+
+            elevated = Native.IsElevated;
+            elevateButton = new FluentButton();
+            elevateButton.Text = "以管理员身份重启";
+            elevateButton.Style = FluentButton.Variant.Secondary;
+            elevateButton.Visible = !elevated;
+            elevateButton.Click += delegate { RestartElevated(); };
+            Controls.Add(elevateButton);
 
             cacheText = "缓存 " + Draw.FormatSize(uploads.CacheBytes());
             clearCacheButton = new FluentButton();
@@ -148,13 +158,19 @@ namespace _801CoursewareUploader
 
         private void AddText(string text, Font font, Color color, int x, int y, int width, int height)
         {
+            AddText(text, font, color, x, y, width, height,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+        }
+
+        private void AddText(string text, Font font, Color color, int x, int y, int width, int height,
+            TextFormatFlags flags)
+        {
             TextLine line = new TextLine();
             line.Text = text;
             line.Font = font;
             line.Color = color;
             line.Bounds = new Rectangle(x, y, width, height);
-            line.Flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
-                TextFormatFlags.NoPrefix;
+            line.Flags = flags;
             textLines.Add(line);
         }
 
@@ -258,7 +274,27 @@ namespace _801CoursewareUploader
                 rightX, cy + labelH, innerWidth - toggleWidth - Draw.Scale(this, 8), descH);
             screenToggle.Bounds = new Rectangle(rightX + innerWidth - toggleWidth,
                 cy + (labelH + descH - toggleHeight) / 2, toggleWidth, toggleHeight);
-            cy += labelH + descH;
+            cy += labelH + descH + gapRow;
+
+            AddText("管理员权限", Theme.FontBody, Theme.Text, rightX, cy, innerWidth, labelH);
+            AddText(elevated ? "已提权" : "普通权限", Theme.FontSmall,
+                elevated ? Theme.Accent : Theme.TextMuted, rightX, cy, innerWidth, labelH,
+                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            AddText("控制任务管理器等管理员窗口需要", Theme.FontSmall, Theme.TextMuted,
+                rightX, cy + labelH, innerWidth, descH);
+            if (elevated)
+            {
+                cy += labelH + descH;
+            }
+            else
+            {
+                int elevateWidth = Math.Max(Draw.Scale(this, 128),
+                    TextRenderer.MeasureText(elevateButton.Text, elevateButton.Font).Width +
+                    Draw.Scale(this, 32));
+                elevateButton.Bounds = new Rectangle(rightX + innerWidth - elevateWidth,
+                    cy + labelH + descH + gapDesc, elevateWidth, Draw.Scale(this, 26));
+                cy += labelH + descH + gapDesc + Draw.Scale(this, 26);
+            }
 
             cards.Add(new Rectangle(pad + colWidth + gap, cardTop, colWidth,
                 cy + cardBottom - cardTop));
@@ -329,6 +365,16 @@ namespace _801CoursewareUploader
             cacheText = "缓存 " + Draw.FormatSize(uploads.CacheBytes());
             Invalidate();
             MessageDialog.Show(this, "清理缓存", "已清理");
+        }
+
+        private void RestartElevated()
+        {
+            if (Native.RestartElevated())
+            {
+                Application.Exit();
+                return;
+            }
+            MessageDialog.Show(this, "管理员权限", "未能以管理员身份启动");
         }
 
         private static List<string> Split(string text)

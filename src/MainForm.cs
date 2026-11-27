@@ -44,11 +44,16 @@ namespace _801CoursewareUploader
         private bool closingConfirmed;
         private bool exiting;
         private bool centered;
+        private bool startHidden;
 
-        public MainForm()
+        private const string InAppTitle = "被控端程序";
+
+        public MainForm(bool restarted)
         {
+            startHidden = restarted;
             Version version = Assembly.GetExecutingAssembly().GetName().Version;
-            Text = "801课件上传工具 v" + version.ToString(3);
+            Text = "801课件上传工具 v" + version.ToString(3) +
+                (Native.IsElevated ? "（管理员）" : "（普通）");
             BackColor = Theme.Window;
             ForeColor = Theme.Text;
             Font = Theme.FontBody;
@@ -225,6 +230,20 @@ namespace _801CoursewareUploader
             Native.CenterOnScreen(this);
         }
 
+        protected override void SetVisibleCore(bool value)
+        {
+            if (startHidden)
+            {
+                startHidden = false;
+                if (value)
+                {
+                    base.SetVisibleCore(false);
+                    return;
+                }
+            }
+            base.SetVisibleCore(value);
+        }
+
         private static int MeasureButton(FluentButton button, int minWidth)
         {
             int textWidth = TextRenderer.MeasureText(button.Text, button.Font).Width;
@@ -276,7 +295,7 @@ namespace _801CoursewareUploader
             qrButton.Bounds = new Rectangle(refreshButton.Right + qrGap,
                 Draw.Scale(this, 41), qrSize, qrSize);
 
-            int titleWidth = TextRenderer.MeasureText(Text, Theme.FontPageTitle).Width;
+            int titleWidth = TextRenderer.MeasureText(InAppTitle, Theme.FontPageTitle).Width;
             percentRect = new Rectangle(padX + titleWidth + Draw.Scale(this, 10),
                 Draw.Scale(this, 10), Draw.Scale(this, 160), Draw.Scale(this, 30));
 
@@ -419,7 +438,7 @@ namespace _801CoursewareUploader
                 g.FillRectangle(background, ClientRectangle);
 
             int padX = Draw.Scale(this, 20);
-            TextRenderer.DrawText(g, Text, Theme.FontPageTitle,
+            TextRenderer.DrawText(g, InAppTitle, Theme.FontPageTitle,
                 new Rectangle(padX, Draw.Scale(this, 10), ClientSize.Width - padX * 2,
                     Draw.Scale(this, 30)), Theme.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
