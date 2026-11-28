@@ -50,6 +50,16 @@ namespace _801CoursewareUploader
                 if (loaded.RegisteredPorts == null) loaded.RegisteredPorts = new List<int>();
                 if (loaded.PasswordSalt == null) loaded.PasswordSalt = "";
                 if (loaded.PasswordHash == null) loaded.PasswordHash = "";
+                if (loaded.ScreenQuality < 20 || loaded.ScreenQuality > 95) loaded.ScreenQuality = 40;
+                if (loaded.ScreenDiffWidth != 0 && loaded.ScreenDiffWidth != 800 &&
+                    loaded.ScreenDiffWidth != 1024 && loaded.ScreenDiffWidth != 1280 &&
+                    loaded.ScreenDiffWidth != 1600 && loaded.ScreenDiffWidth != 1920 &&
+                    loaded.ScreenDiffWidth != 2560) loaded.ScreenDiffWidth = 0;
+                if (loaded.ScreenRtcWidth != 0 && loaded.ScreenRtcWidth != 1024 &&
+                    loaded.ScreenRtcWidth != 1280 && loaded.ScreenRtcWidth != 1600 &&
+                    loaded.ScreenRtcWidth != 1920 && loaded.ScreenRtcWidth != 2560) loaded.ScreenRtcWidth = 0;
+                if (loaded.ScreenRtcBitrate != 8 && loaded.ScreenRtcBitrate != 16 &&
+                    loaded.ScreenRtcBitrate != 32) loaded.ScreenRtcBitrate = 32;
 
                 config = loaded;
             }

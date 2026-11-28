@@ -31,7 +31,7 @@
         </button>
     </div>
     <div class="conn-state">
-        <span id="connText">服务器连接状态：未连接</span>
+        <span id="connText" title="服务器连接状态：未连接">未连接</span>
         <span class="conn-dot" id="connDot" title="未连接"></span>
         <span class="conn-info" id="connInfo"></span>
         <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btnDiskSpace" title="磁盘空间">
@@ -231,13 +231,101 @@
     </div>
 </div>
 
-<div class="modal fade" id="screenModal" tabindex="-1" aria-hidden="true" data-bs-keyboard="false">
+<div class="modal fade" id="screenModal" tabindex="-1" aria-hidden="true" data-bs-keyboard="false" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="screen-frame">
+        <aside class="screen-info" id="screenInfo">
+        <div class="screen-info-scroll">
+            <div class="screen-info-row">
+                <span class="screen-info-label">电脑</span>
+                <span class="screen-info-value" id="infoDevice">-</span>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">显示器</span>
+                <span class="screen-info-value" id="infoMonitor">-</span>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">分辨率</span>
+                <span class="screen-info-value" id="infoResolution">-</span>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">帧率</span>
+                <span class="screen-info-value" id="infoFps">-</span>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">带宽</span>
+                <span class="screen-info-value" id="infoBandwidth">-</span>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">延迟</span>
+                <span class="screen-info-value" id="infoLatency">-</span>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">传输方式</span>
+                <span class="screen-info-value" id="infoTransport">-</span>
+            </div>
+            <div class="screen-info-row" id="infoQualityRow">
+                <span class="screen-info-label">画质</span>
+                <select class="screen-info-select" id="infoQuality" title="MJPEG 画质">
+                    <option value="20">极速 20</option>
+                    <option value="30">省流 30</option>
+                    <option value="40">精简 40</option>
+                    <option value="50">流畅 50</option>
+                    <option value="60">标准 60</option>
+                    <option value="75">清晰 75</option>
+                    <option value="85">高清 85</option>
+                    <option value="95">超清 95</option>
+                </select>
+            </div>
+            <div class="screen-info-row" id="infoDiffQualityRow">
+                <span class="screen-info-label">清晰度</span>
+                <select class="screen-info-select" id="infoDiffQuality" title="差分采集宽度">
+                    <option value="0">原生</option>
+                    <option value="2560">2560</option>
+                    <option value="1920">1920</option>
+                    <option value="1600">1600</option>
+                    <option value="1280">1280</option>
+                    <option value="1024">1024</option>
+                    <option value="800">800</option>
+                </select>
+            </div>
+            <div class="screen-info-row" id="infoRtcQualityRow">
+                <span class="screen-info-label">清晰度</span>
+                <select class="screen-info-select" id="infoRtcQuality" title="WebRTC 编码宽度">
+                    <option value="0">原生</option>
+                    <option value="2560">2560</option>
+                    <option value="1920">1920</option>
+                    <option value="1600">1600</option>
+                    <option value="1280">1280</option>
+                    <option value="1024">1024</option>
+                </select>
+            </div>
+            <div class="screen-info-row" id="infoRtcBitrateRow">
+                <span class="screen-info-label">码率</span>
+                <select class="screen-info-select" id="infoRtcBitrate" title="WebRTC 码率上限">
+                    <option value="8">8 Mbps</option>
+                    <option value="16">16 Mbps</option>
+                    <option value="32">32 Mbps</option>
+                </select>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">操作</span>
+                <span class="screen-info-value" id="infoStatus">-</span>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">权限</span>
+                <span class="screen-info-value" id="infoPermission">-</span>
+            </div>
+            <div class="screen-info-row">
+                <span class="screen-info-label">坐标</span>
+                <span class="screen-info-value" id="infoPointer">-</span>
+            </div>
+        </div>
+        </aside>
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="screenTitle">屏幕控制</h5>
                 <div class="screen-tools">
-                    <span id="screenStats" class="screen-stats"></span>
                     <select class="form-select form-select-sm" id="screenSelect" title="显示器"></select>
                     <div class="dropdown screen-transport">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="screenTransportBtn" data-bs-toggle="dropdown" aria-expanded="false" title="传输方式">
@@ -258,18 +346,24 @@
                             </a></li>
                         </ul>
                     </div>
+                    <button class="btn btn-sm btn-outline-secondary screen-pointer-btn" type="button" id="screenPointerToggle" title="显示鼠标指针" aria-pressed="false">
+                        <i class="bi bi-cursor"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary screen-refresh-btn" type="button" id="screenRefresh" title="刷新画面">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                     <div class="dropdown">
                         <button class="btn btn-sm btn-outline-secondary" type="button" id="screenKeyHelp" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="查看快捷键">查看快捷键</button>
                         <ul class="dropdown-menu dropdown-menu-end screen-keyhelp" id="screenKeyHelpMenu" aria-labelledby="screenKeyHelp">
                             <li class="keyhelp-section">
                                 <div class="keyhelp-title">普通按键</div>
                                 <div class="keyhelp-tags">
-                                    <kbd>A - Z</kbd><kbd>0 - 9</kbd><kbd>F1 - F12</kbd><kbd>小键盘 0 - 9</kbd>
+                                    <kbd>A - Z</kbd><kbd>0 - 9</kbd><kbd>F1 - F24</kbd><kbd>小键盘 0 - 9</kbd>
                                     <kbd>Esc</kbd><kbd>Tab</kbd><kbd>Enter</kbd><kbd>空格</kbd>
                                     <kbd>Backspace</kbd><kbd>Delete</kbd><kbd>Insert</kbd>
                                     <kbd>Home</kbd><kbd>End</kbd><kbd>PgUp</kbd><kbd>PgDn</kbd><kbd>方向键</kbd>
                                     <kbd>CapsLock</kbd><kbd>NumLock</kbd><kbd>ScrollLock</kbd><kbd>PrintScreen</kbd><kbd>Pause</kbd><kbd>Menu</kbd>
-                                    <kbd>符号键</kbd>
+                                    <kbd>符号键</kbd><kbd>音量键</kbd><kbd>播放/暂停</kbd><kbd>上一曲/下一曲</kbd>
                                 </div>
                             </li>
                             <li class="keyhelp-section">
@@ -280,7 +374,17 @@
                                 <div class="keyhelp-row"><span class="keys"><kbd>Shift</kbd> + <kbd>方向键</kbd></span><span class="desc">选择文本 / 区域</span></div>
                                 <div class="keyhelp-row"><span class="keys"><kbd>Alt</kbd> + <kbd>Enter</kbd></span><span class="desc">查看属性</span></div>
                             </li>
-                            <li class="keyhelp-note">浏览器占用的快捷键无法转发：Ctrl+W、Ctrl+T、Ctrl+N、Alt+Tab、Alt+F4、Win 键及组合，请在被控电脑上直接操作。</li>
+                            <li class="keyhelp-note">Win 组合键请用上方「系统键」发送；Ctrl+W、Ctrl+T、Ctrl+N、Alt+Tab、Alt+F4 被浏览器占用，无法转发。</li>
+                        </ul>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="screenSysKey" data-bs-toggle="dropdown" aria-expanded="false" title="系统键">系统键</button>
+                        <ul class="dropdown-menu dropdown-menu-end" id="screenSysKeyMenu" aria-labelledby="screenSysKey">
+                            <li><button type="button" class="dropdown-item" data-winkey="1">投影模式 <span class="text-body-secondary">Win+P</span></button></li>
+                            <li><button type="button" class="dropdown-item" data-winkey="2">显示桌面 <span class="text-body-secondary">Win+D</span></button></li>
+                            <li><button type="button" class="dropdown-item" data-winkey="3">文件资源管理器 <span class="text-body-secondary">Win+E</span></button></li>
+                            <li><button type="button" class="dropdown-item" data-winkey="4">运行 <span class="text-body-secondary">Win+R</span></button></li>
+                            <li><button type="button" class="dropdown-item" data-winkey="5">任务视图 <span class="text-body-secondary">Win+Tab</span></button></li>
                         </ul>
                     </div>
                 </div>
@@ -306,7 +410,11 @@
                     <div class="screen-loading-blur" id="screenLoadingBlur"></div>
                     <span class="screen-loading-text">正在加载画面</span>
                 </div>
+                <div class="screen-lock d-none" id="screenLock">
+                    <button type="button" class="btn btn-sm btn-primary" id="screenUnlock">解锁</button>
+                </div>
             </div>
+        </div>
         </div>
     </div>
 </div>

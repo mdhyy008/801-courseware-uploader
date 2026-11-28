@@ -942,6 +942,23 @@ button {
     color: #fff;
 }
 
+.screen-pointer-btn.on {
+    color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    background: var(--bs-primary-bg-subtle);
+}
+
+.screen-refresh-btn.spinning i {
+    display: inline-block;
+    animation: screen-refresh-spin .6s linear;
+}
+
+@keyframes screen-refresh-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .screen-tools .form-select {
     width: auto;
     min-width: 6.5rem;
@@ -1046,16 +1063,94 @@ button {
     color: var(--bs-secondary-color);
 }
 
-.screen-stats {
-    align-self: center;
-    font-size: .8rem;
-    font-variant-numeric: tabular-nums;
-    opacity: .72;
-    white-space: nowrap;
+.screen-frame {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
 }
 
-.screen-stats .screen-bw {
+.screen-frame > .modal-content {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
+
+.screen-info {
+    position: relative;
+    flex: 0 0 190px;
+    min-height: 0;
+    border-radius: .5rem 0 0 .5rem;
+    background: #1b1b1b;
+    color: #e8e8e8;
+    font-variant-numeric: tabular-nums;
+    pointer-events: auto;
+}
+
+.screen-info-scroll {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: .6rem;
+    padding: .9rem 1rem;
+    overflow-y: auto;
+}
+
+.screen-info-row {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    min-width: 0;
+}
+
+.screen-info-label {
+    font-size: .7rem;
+    letter-spacing: .04em;
+    color: rgba(255, 255, 255, .55);
+}
+
+.screen-info-value {
+    font-size: .84rem;
     font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.screen-info-select {
+    width: 100%;
+    padding: 1px 5px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: .35rem;
+    background: #2a2a2a;
+    color: #e8e8e8;
+    font-size: .78rem;
+    line-height: 1.5;
+    color-scheme: dark;
+    outline: none;
+}
+
+.screen-info-select:focus {
+    border-color: var(--bs-primary);
+}
+
+.screen-info-select:disabled {
+    opacity: .45;
+}
+
+.modal-fullscreen .screen-frame {
+    height: 100%;
+}
+
+.modal-fullscreen .screen-info {
+    display: none;
+}
+
+@media (max-width: 575.98px) {
+    .screen-info {
+        display: none;
+    }
 }
 
 .screen-bw-high {
@@ -1068,6 +1163,18 @@ button {
 
 .screen-bw-low {
     color: var(--bs-secondary-color);
+}
+
+.screen-info-value.screen-bw-high {
+    color: #f6b73c;
+}
+
+.screen-info-value.screen-bw-ok {
+    color: #5cd18f;
+}
+
+.screen-info-value.screen-bw-low {
+    color: rgba(255, 255, 255, .78);
 }
 
 .screen-elevate {
@@ -1150,6 +1257,28 @@ button {
     padding-left: .24em;
     color: #fff;
     text-shadow: 0 2px 18px rgba(0, 0, 0, .6);
+}
+
+.screen-lock {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: .7rem;
+    background: rgba(0, 0, 0, .18);
+}
+
+.screen-lock .btn.nudge {
+    animation: screen-unlock-bounce .5s ease;
+}
+
+@keyframes screen-unlock-bounce {
+    0%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-7px); }
+    55% { transform: translateY(0); }
+    75% { transform: translateY(-3px); }
 }
 
 .screen-float {
@@ -1368,5 +1497,173 @@ button {
 @media (max-width: 520px) {
     .layout .sidebar {
         display: none;
+    }
+}
+
+/* ---------------- 状态胶囊 ---------------- */
+
+.conn-state,
+.conn-info,
+.file-count,
+.disk-meter-text,
+.brand-version,
+.upload-stats,
+.upload-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 9px;
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 999px;
+    background: var(--bs-tertiary-bg);
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+.conn-info:empty,
+.file-count:empty,
+.upload-stats:empty,
+.upload-state:empty,
+.brand-version:empty {
+    display: none;
+}
+
+.brand-version {
+    padding: 0 7px;
+    font-size: 11px;
+}
+
+.conn-state.ok {
+    border-color: transparent;
+    background: var(--bs-success-bg-subtle);
+    color: var(--bs-success-text-emphasis);
+}
+
+.conn-state.ok .conn-dot {
+    background: var(--bs-success);
+}
+
+.upload-item.done .upload-state {
+    border-color: transparent;
+    background: var(--bs-success-bg-subtle);
+    color: var(--bs-success-text-emphasis);
+}
+
+.upload-item.failed .upload-state {
+    border-color: transparent;
+    background: var(--bs-danger-bg-subtle);
+    color: var(--bs-danger-text-emphasis);
+}
+
+/* ---------------- 手机适配 ---------------- */
+
+@media (max-width: 900px) {
+    .disk-meter-text {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .topbar {
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        padding-top: calc(8px + env(safe-area-inset-top));
+        padding-bottom: 8px;
+        padding-left: calc(10px + env(safe-area-inset-left));
+        padding-right: calc(10px + env(safe-area-inset-right));
+    }
+
+    .brand {
+        gap: 6px;
+        font-size: 15px;
+    }
+
+    .brand .bi {
+        font-size: 18px;
+    }
+
+    .brand-version,
+    .conn-info,
+    .disk-meter {
+        display: none;
+    }
+
+    .conn-state {
+        gap: 4px;
+    }
+
+    .topbar-right {
+        gap: 6px;
+    }
+}
+
+@media (max-width: 400px) {
+    .brand .qr-btn {
+        display: none;
+    }
+}
+
+/* ---------------- 屏幕控制手机适配 ---------------- */
+
+@media (max-width: 575.98px) {
+    #screenModal .modal-dialog:not(.modal-fullscreen) {
+        max-width: calc(100vw - .25rem);
+    }
+
+    #screenModal .modal-header {
+        flex-wrap: wrap;
+        gap: .4rem;
+        padding: .5rem .65rem;
+    }
+
+    #screenModal .modal-title {
+        flex: 1 1 0;
+        min-width: 0;
+        font-size: 1rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #screenModal .screen-window-btn {
+        margin-left: 0;
+    }
+
+    .screen-tools {
+        order: 3;
+        flex: 1 1 100%;
+        width: 100%;
+        margin: 0;
+        flex-wrap: wrap;
+        gap: .3rem;
+    }
+
+    .screen-tools .form-select {
+        flex: 1 1 5rem;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .screen-transport {
+        flex: 1 1 5rem;
+        min-width: 0;
+    }
+
+    .screen-transport .btn {
+        width: 100%;
+        min-width: 0;
+        padding-left: .4rem;
+        padding-right: .4rem;
+    }
+
+    .screen-transport-menu,
+    .screen-keyhelp {
+        max-width: calc(100vw - 24px);
+    }
+
+    .screen-float {
+        top: 64px;
+        right: 8px;
+        max-width: calc(100vw - 16px);
     }
 }

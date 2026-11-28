@@ -30,6 +30,25 @@ namespace _801CoursewareUploader
         public bool Enabled { get; set; }
     }
 
+    public sealed class ScreenQualityRequest
+    {
+        public int Quality { get; set; }
+    }
+
+    public sealed class ScreenOptionsRequest
+    {
+        public ScreenOptionsRequest()
+        {
+            DiffWidth = -1;
+            RtcWidth = -1;
+            RtcBitrate = -1;
+        }
+
+        public int DiffWidth { get; set; }
+        public int RtcWidth { get; set; }
+        public int RtcBitrate { get; set; }
+    }
+
     public sealed class AppConfig
     {
         public int Port { get; set; }
@@ -43,6 +62,10 @@ namespace _801CoursewareUploader
         public List<RosterEntry> Rosters { get; set; }
         public bool LanPrompted { get; set; }
         public bool RtcFirewall { get; set; }
+        public int ScreenQuality { get; set; }
+        public int ScreenDiffWidth { get; set; }
+        public int ScreenRtcWidth { get; set; }
+        public int ScreenRtcBitrate { get; set; }
         public List<int> RegisteredPorts { get; set; }
 
         public AppConfig()
@@ -52,6 +75,10 @@ namespace _801CoursewareUploader
             PasswordHash = "";
             MaxConcurrent = 3;
             ScreenControlEnabled = true;
+            ScreenQuality = 40;
+            ScreenDiffWidth = 0;
+            ScreenRtcWidth = 0;
+            ScreenRtcBitrate = 32;
             Whitelist = DefaultWhitelist();
             Directories = new List<DirectoryEntry>();
             Rosters = new List<RosterEntry>();
@@ -126,6 +153,7 @@ namespace _801CoursewareUploader
         public string Action { get; set; }
         public int X { get; set; }
         public int Y { get; set; }
+        public int Delta { get; set; }
     }
 
     public sealed class RtcOfferRequest

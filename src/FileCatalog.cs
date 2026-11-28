@@ -59,6 +59,7 @@ namespace _801CoursewareUploader
         public sealed class RosterStatusView
         {
             public string Name;
+            public string FirstFile;
             public int Count;
             public int FolderCount;
             public long Bytes;
@@ -738,10 +739,12 @@ namespace _801CoursewareUploader
                 string[] files;
                 try { files = Directory.GetFiles(personFolder); }
                 catch { continue; }
+                Array.Sort(files, StringComparer.OrdinalIgnoreCase);
                 for (int j = 0; j < files.Length; j++)
                 {
                     if (IsHiddenPath(files[j])) continue;
                     if (!IsWhitelisted(Path.GetFileName(files[j]))) continue;
+                    if (view.FirstFile == null) view.FirstFile = Path.GetFileName(files[j]);
                     try
                     {
                         FileInfo info = new FileInfo(files[j]);

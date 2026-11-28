@@ -152,8 +152,12 @@
         if (!dot) return;
         dot.classList.toggle('ok', ok);
         dot.title = ok ? '已连接' : '未连接';
+        if (dot.parentNode) dot.parentNode.classList.toggle('ok', ok);
         var text = $('connText');
-        if (text) text.textContent = '服务器连接状态：' + (ok ? '已连接' : '未连接');
+        if (text) {
+            text.textContent = ok ? '已连接' : '未连接';
+            text.title = '服务器连接状态：' + (ok ? '已连接' : '未连接');
+        }
     }
 
     function heartbeat() {
@@ -190,6 +194,8 @@
             info.textContent = label;
             info.title = label;
         }
+        var infoDevice = $('infoDevice');
+        if (infoDevice) infoDevice.textContent = device || '-';
         if (device) {
             deviceName = device;
             applyScreenTitle();
@@ -1256,12 +1262,145 @@
         }
     } catch (e) { }
 
+    var screenPointerVisible = false;
+    try {
+        screenPointerVisible = localStorage.getItem('screenPointer.v1') === '1';
+    } catch (e) { }
+
+    function updatePointerToggle() {
+        var button = $('screenPointerToggle');
+        if (!button) return;
+        button.classList.toggle('on', screenPointerVisible);
+        button.setAttribute('aria-pressed', screenPointerVisible ? 'true' : 'false');
+    }
+
+    function setScreenPointerVisible(on) {
+        screenPointerVisible = !!on;
+        try { localStorage.setItem('screenPointer.v1', screenPointerVisible ? '1' : '0'); } catch (e) { }
+        updatePointerToggle();
+    }
+
     function screenAt(index) {
         if (!screenInfo || !screenInfo.screens) return null;
         for (var i = 0; i < screenInfo.screens.length; i++) {
             if (screenInfo.screens[i].id === index) return screenInfo.screens[i];
         }
         return null;
+    }
+
+    var SCREEN_INFO_WIDTH = 190;
+    var screenTransportNames = { diff: '差分', mjpeg: 'MJPEG', rtc: 'WebRTC' };
+
+    function refreshScreenInfoRows() {
+        var screen = screenAt(screenIndex);
+        var device = $('infoDevice');
+        if (device) device.textContent = deviceName || '-';
+        var monitor = $('infoMonitor');
+        if (monitor) monitor.textContent = screen && screen.name ? screen.name : '-';
+        var res = $('infoResolution');
+        if (res) {
+            if (!screen || !(screen.width > 0)) {
+                res.textContent = '-';
+            } else {
+                var limit = screenTransport === 'diff' ? (screenInfo && screenInfo.diffWidth)
+                    : screenTransport === 'rtc' ? (screenInfo && screenInfo.rtcWidth) : 0;
+                var width = screen.width;
+                var height = screen.height;
+                if (limit > 0 && width > limit) {
+                    height = Math.round(height * limit / width);
+                    width = limit;
+                }
+                res.textContent = width + ' × ' + height;
+            }
+        }
+        var transport = $('infoTransport');
+        if (transport) transport.textContent = screenTransportNames[screenTransport] || 'MJPEG';
+        var status = $('infoStatus');
+        if (status) {
+            status.textContent = !screenInfo ? '-' : (screenLocked ? '已锁定' : '可操作');
+        }
+        var permission = $('infoPermission');
+        if (permission) {
+            permission.textContent = !screenInfo ? '-' : (screenInfo.elevated === true ? '管理员' : '普通');
+        }
+        var qualityRow = $('infoQualityRow');
+        if (qualityRow) qualityRow.classList.toggle('d-none', screenTransport !== 'mjpeg');
+        var diffRow = $('infoDiffQualityRow');
+        if (diffRow) diffRow.classList.toggle('d-none', screenTransport !== 'diff');
+        var rtcRow = $('infoRtcQualityRow');
+        if (rtcRow) rtcRow.classList.toggle('d-none', screenTransport !== 'rtc');
+        var bitrateRow = $('infoRtcBitrateRow');
+        if (bitrateRow) bitrateRow.classList.toggle('d-none', screenTransport !== 'rtc');
+    }
+
+    function applyScreenOptions(info) {
+        if (!info) return;
+        var diff = $('infoDiffQuality');
+        if (diff && info.diffWidth !== undefined) diff.value = String(info.diffWidth || 0);
+        var rtc = $('infoRtcQuality');
+        if (rtc && info.rtcWidth !== undefined) rtc.value = String(info.rtcWidth || 0);
+        var bitrate = $('infoRtcBitrate');
+        if (bitrate && info.rtcBitrate) bitrate.value = String(info.rtcBitrate);
+    }
+
+    function postScreenOptions() {
+        var diff = $('infoDiffQuality');
+        var rtc = $('infoRtcQuality');
+        var bitrate = $('infoRtcBitrate');
+        return postJson('/api/screen/options', {
+            diffWidth: diff ? parseInt(diff.value, 10) || 0 : 0,
+            rtcWidth: rtc ? parseInt(rtc.value, 10) || 0 : 0,
+            rtcBitrate: bitrate ? parseInt(bitrate.value, 10) || 32 : 32
+        });
+    }
+
+    function saveScreenOptions(activeKind, label) {
+        postScreenOptions().then(function (res) {
+            if (!res) return;
+            if (screenInfo) {
+                screenInfo.diffWidth = res.diffWidth;
+                screenInfo.rtcWidth = res.rtcWidth;
+                screenInfo.rtcBitrate = res.rtcBitrate;
+            }
+            applyScreenOptions(res);
+            refreshScreenInfoRows();
+            if (activeKind === screenTransport) startTransport();
+            toast(label);
+        }).catch(function (err) {
+            toast(err.message || '设置失败');
+        });
+    }
+
+    function setInfoStatus(text) {
+        var status = $('infoStatus');
+        if (status) status.textContent = text;
+    }
+
+    function setInfoPointer(x, y) {
+        var screen = screenAt(screenIndex);
+        var pointer = $('infoPointer');
+        if (!screen || !pointer) return;
+        pointer.textContent = (x - screen.left) + ', ' + (y - screen.top);
+    }
+
+    function fitScreenDialog() {
+        var dialog = $('screenModal').querySelector('.modal-dialog');
+        var screen = screenAt(screenIndex);
+        if (!dialog || !screen || screen.width <= 0 || screen.height <= 0) return;
+        refreshScreenInfoRows();
+        if (dialog.classList.contains('modal-fullscreen')) {
+            dialog.style.width = '';
+            dialog.style.maxWidth = '';
+            return;
+        }
+        var narrow = window.innerWidth <= 575.98;
+        var infoWidth = narrow ? 0 : SCREEN_INFO_WIDTH;
+        var aspect = screen.width / screen.height;
+        var maxW = Math.max(320, window.innerWidth - (narrow ? 16 : 48));
+        var maxH = Math.max(180, window.innerHeight * (narrow ? 0.6 : 0.78));
+        var mediaWidth = Math.min(Math.max(320, maxW - infoWidth), maxH * aspect);
+        dialog.style.width = Math.round(mediaWidth + infoWidth) + 'px';
+        dialog.style.maxWidth = narrow ? 'calc(100vw - .7rem)' : 'calc(100vw - 32px)';
     }
 
     function showScreenElement(kind) {
@@ -1283,16 +1422,23 @@
     }
 
     function refreshScreenStats() {
-        var el = $('screenStats');
-        if (!el) return;
         var kind = screenTransport;
         var index = screenIndex;
+        var started = Date.now();
         getJson('/api/screen/stats?screen=' + index + '&kind=' + kind).then(function (stat) {
             if (!screenInfo || kind !== screenTransport || index !== screenIndex) return;
             var bps = stat.bps || 0;
             var band = screenBandwidthBand(bps);
-            el.innerHTML = '<span class="screen-bw ' + band.cls + '">' + band.text + '</span> · ' +
-                formatScreenRate(bps) + ' · ' + (stat.fps || 0) + ' fps';
+            var bandwidth = $('infoBandwidth');
+            if (bandwidth) {
+                bandwidth.textContent = formatScreenRate(bps);
+                bandwidth.className = 'screen-info-value ' + band.cls;
+                bandwidth.title = band.text;
+            }
+            var fps = $('infoFps');
+            if (fps) fps.textContent = (stat.fps || 0) + ' fps';
+            var latency = $('infoLatency');
+            if (latency) latency.textContent = Math.max(1, Date.now() - started) + ' ms';
         }).catch(function () { });
     }
 
@@ -1307,8 +1453,16 @@
             clearInterval(screenStatsTimer);
             screenStatsTimer = null;
         }
-        var el = $('screenStats');
-        if (el) el.textContent = '';
+        var bandwidth = $('infoBandwidth');
+        if (bandwidth) {
+            bandwidth.textContent = '-';
+            bandwidth.className = 'screen-info-value';
+            bandwidth.title = '';
+        }
+        var fps = $('infoFps');
+        if (fps) fps.textContent = '-';
+        var latency = $('infoLatency');
+        if (latency) latency.textContent = '-';
     }
 
     var screenLoadingTimer = 0;
@@ -1373,7 +1527,8 @@
                 var info = screenAt(screenIndex);
                 var aw = info && info.width ? info.width : 1920;
                 var ah = info && info.height ? info.height : 1080;
-                var maxW = Math.min(1140, window.innerWidth - 48);
+                var dialogW = dialog ? dialog.clientWidth : 0;
+                var maxW = dialogW >= 200 ? dialogW : Math.min(1140, window.innerWidth - 48);
                 var maxH = Math.min(window.innerHeight * 0.78, window.innerHeight - 150);
                 width = Math.max(320, maxW);
                 height = Math.round(width * ah / aw);
@@ -1406,15 +1561,26 @@
     }
 
     function startDiff() {
+        var compress = typeof DecompressionStream === 'function';
         var url = (location.protocol === 'https:' ? 'wss://' : 'ws://') +
-            location.host + '/api/screen/live?screen=' + screenIndex;
+            location.host + '/api/screen/live?screen=' + screenIndex +
+            (compress ? '&z=1' : '');
         var ws = new WebSocket(url);
         ws.binaryType = 'arraybuffer';
         screenWs = ws;
         var canvas = $('screenCanvas');
         ws.onmessage = function (event) {
             if (screenWs !== ws) return;
-            drawScreenTiles(canvas, event.data);
+            var flag = new DataView(event.data).getUint8(0);
+            if (flag === 2) {
+                var raw = new Uint8Array(event.data, 8);
+                var stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+                new Response(stream).arrayBuffer().then(function (payload) {
+                    if (screenWs === ws) drawScreenTiles(canvas, event.data, payload);
+                }).catch(function () { });
+            } else {
+                drawScreenTiles(canvas, event.data, null);
+            }
             endScreenLoading();
         };
         ws.onclose = function () {
@@ -1426,28 +1592,32 @@
         };
     }
 
-    function drawScreenTiles(canvas, data) {
-        var view = new DataView(data);
-        if (view.getUint8(0) !== 1) return;
-        var width = view.getUint16(2, true);
-        var height = view.getUint16(4, true);
+    function drawScreenTiles(canvas, data, payload) {
+        var header = new DataView(data);
+        var flag = header.getUint8(0);
+        if (flag !== 1 && flag !== 2) return;
+        var width = header.getUint16(2, true);
+        var height = header.getUint16(4, true);
         if (!width || !height) return;
         if (canvas.width !== width || canvas.height !== height) {
             canvas.width = width;
             canvas.height = height;
         }
         var ctx = canvas.getContext('2d');
-        var tileSize = view.getUint8(1);
-        var count = view.getUint16(6, true);
+        var tileSize = header.getUint8(1);
+        var count = header.getUint16(6, true);
         var cols = Math.ceil(width / tileSize);
-        var offset = 8;
+        var view = payload ? new DataView(payload) : header;
+        var offset = payload ? 0 : 8;
         for (var i = 0; i < count; i++) {
             var index = view.getUint16(offset, true);
             var tw = view.getUint8(offset + 2);
             var th = view.getUint8(offset + 3);
             offset += 4;
-            var pixels = new Uint8ClampedArray(data, offset, tw * th * 4);
-            ctx.putImageData(new ImageData(pixels, tw, th),
+            var bytes = payload
+                ? new Uint8Array(payload, offset, tw * th * 4)
+                : new Uint8Array(data, offset, tw * th * 4);
+            ctx.putImageData(new ImageData(new Uint8ClampedArray(bytes), tw, th),
                 (index % cols) * tileSize, Math.floor(index / cols) * tileSize);
             offset += tw * th * 4;
         }
@@ -1541,14 +1711,14 @@
     }
 
     function updateTransportLabel() {
-        var names = { diff: '差分', mjpeg: 'MJPEG', rtc: 'WebRTC' };
         var label = $('screenTransportLabel');
-        if (label) label.textContent = names[screenTransport] || 'MJPEG';
+        if (label) label.textContent = screenTransportNames[screenTransport] || 'MJPEG';
         var items = document.querySelectorAll('#screenTransportMenu .dropdown-item');
         for (var i = 0; i < items.length; i++) {
             items[i].classList.toggle('active',
                 items[i].getAttribute('data-transport') === screenTransport);
         }
+        refreshScreenInfoRows();
     }
 
     function setTransport(kind) {
@@ -1560,6 +1730,9 @@
     function selectScreen(index) {
         if (screenIndex === index) return;
         screenIndex = index;
+        var pointer = $('infoPointer');
+        if (pointer) pointer.textContent = '-';
+        fitScreenDialog();
         startTransport();
     }
 
@@ -1571,6 +1744,8 @@
         }
         var screenDialog = $('screenModal').querySelector('.modal-dialog');
         if (screenDialog) screenDialog.classList.remove('modal-fullscreen');
+        var pointerInfo = $('infoPointer');
+        if (pointerInfo) pointerInfo.textContent = '-';
         updateScreenMaxIcon();
         applyScreenTitle();
         getJson('/api/screen/info').then(function (info) {
@@ -1590,11 +1765,59 @@
             select.value = String(screenIndex);
             select.classList.toggle('d-none', screens.length < 2);
             updateTransportLabel();
+            var qualitySelect = $('infoQuality');
+            if (qualitySelect) qualitySelect.value = String(info.quality || 40);
+            applyScreenOptions(info);
+            fitScreenDialog();
             startTransport();
             openPointerSocket();
             modal('screenModal').show();
         }).catch(function (err) {
             toast(err.message || '无法获取屏幕');
+        });
+    }
+
+    var screenRefreshing = false;
+
+    function refreshScreen() {
+        if (screenRefreshing) return;
+        screenRefreshing = true;
+        var button = $('screenRefresh');
+        if (button) {
+            button.classList.remove('spinning');
+            void button.offsetWidth;
+            button.classList.add('spinning');
+        }
+        var previous = screenIndex;
+        getJson('/api/screen/info').then(function (info) {
+            screenInfo = info;
+            var select = $('screenSelect');
+            select.innerHTML = '';
+            var screens = info.screens || [];
+            for (var i = 0; i < screens.length; i++) {
+                var option = document.createElement('option');
+                option.value = String(screens[i].id);
+                option.textContent = screens[i].name;
+                select.appendChild(option);
+            }
+            screenIndex = screenAt(previous) ? previous : (info.primary >= 0 ? info.primary : 0);
+            select.value = String(screenIndex);
+            select.classList.toggle('d-none', screens.length < 2);
+            $('screenElevate').classList.toggle('d-none', info.elevated !== false);
+            var qualitySelect = $('infoQuality');
+            if (qualitySelect) qualitySelect.value = String(info.quality || 40);
+            applyScreenOptions(info);
+            updateTransportLabel();
+            fitScreenDialog();
+            startTransport();
+            toast('画面已刷新');
+        }).catch(function (err) {
+            toast(err.message || '刷新失败');
+        }).then(function () {
+            setTimeout(function () {
+                if (button) button.classList.remove('spinning');
+                screenRefreshing = false;
+            }, 600);
         });
     }
 
@@ -1634,11 +1857,58 @@
     var screenMinimized = false;
     var screenFloatDrag = null;
 
+    var SCREEN_IDLE_MS = 15000;
+    var screenLocked = false;
+    var screenIdleTimer = 0;
+
+    function clearScreenIdle() {
+        if (screenIdleTimer) {
+            clearTimeout(screenIdleTimer);
+            screenIdleTimer = 0;
+        }
+    }
+
+    function noteScreenActivity() {
+        clearScreenIdle();
+        if (!screenInfo || screenMinimized || screenLocked) return;
+        screenIdleTimer = setTimeout(lockScreenControl, SCREEN_IDLE_MS);
+    }
+
+    function lockScreenControl() {
+        screenIdleTimer = 0;
+        if (!screenInfo || screenMinimized || screenLocked) return;
+        screenLocked = true;
+        pointerActive = false;
+        pointerPending = null;
+        if (pointerFrame) {
+            cancelAnimationFrame(pointerFrame);
+            pointerFrame = 0;
+        }
+        releaseKeys();
+        $('screenLock').classList.remove('d-none');
+        setInfoStatus('已锁定');
+    }
+
+    function unlockScreenControl() {
+        screenLocked = false;
+        $('screenLock').classList.add('d-none');
+        setInfoStatus('可操作');
+        noteScreenActivity();
+    }
+
+    function pauseScreenIdle() {
+        clearScreenIdle();
+        screenLocked = false;
+        $('screenLock').classList.add('d-none');
+        setInfoStatus('可操作');
+    }
+
     function moveScreenMedia(from, to) {
         var children = Array.prototype.slice.call(from.children);
         for (var i = 0; i < children.length; i++) {
             var child = children[i];
             if (child.id === 'screenLoading') continue;
+            if (child.id === 'screenLock') continue;
             if (child.classList && child.classList.contains('screen-float-hint')) continue;
             to.appendChild(child);
         }
@@ -1648,6 +1918,7 @@
         moveScreenMedia($('screenBody'), $('screenFloatBody'));
         $('screenFloat').classList.remove('d-none');
         screenMinimized = true;
+        pauseScreenIdle();
         var instance = bootstrap.Modal.getInstance($('screenModal'));
         if (instance) instance.hide();
     }
@@ -1658,6 +1929,7 @@
         screenMinimized = false;
         var instance = bootstrap.Modal.getInstance($('screenModal'));
         if (instance) instance.show();
+        noteScreenActivity();
     }
 
     function closeScreenFromFloat() {
@@ -1706,6 +1978,7 @@
         var dialog = $('screenModal').querySelector('.modal-dialog');
         if (!dialog) return;
         dialog.classList.toggle('modal-fullscreen');
+        fitScreenDialog();
         if (screenLoadingVisible()) {
             if (dialog.classList.contains('modal-fullscreen')) {
                 var body = $('screenBody');
@@ -1728,6 +2001,7 @@
 
     function closeScreen() {
         screenMinimized = false;
+        pauseScreenIdle();
         var float = $('screenFloat');
         if (float) {
             moveScreenMedia($('screenFloatBody'), $('screenBody'));
@@ -1798,15 +2072,19 @@
         }
     }
 
-    function sendPointer(action, x, y, mode) {
+    function sendPointer(action, x, y, mode, delta) {
+        if (action !== 's') setInfoPointer(x, y);
         if (mode !== 'http' && pointerSocket && pointerSocket.readyState === 1) {
             try {
-                pointerSocket.send(action + ' ' + x + ' ' + y);
+                pointerSocket.send(action + ' ' + x + ' ' + y +
+                    (delta === undefined ? '' : ' ' + delta));
                 return;
             } catch (e) { }
         }
+        var payload = { action: action, x: x, y: y };
+        if (delta !== undefined) payload.delta = delta;
         pointerChain = pointerChain.then(function () {
-            return postJson('/api/screen/pointer', { action: action, x: x, y: y });
+            return postJson('/api/screen/pointer', payload);
         }).catch(function () { });
     }
 
@@ -1834,7 +2112,15 @@
     }
 
     function screenPointerDown(event, element) {
-        if (!screenInfo) return;
+        if (!screenInfo || screenLocked) return;
+        noteScreenActivity();
+        if (event.button === 3 || event.button === 4) {
+            var side = screenPoint(event, element, false);
+            if (!side) return;
+            event.preventDefault();
+            sendPointer(event.button === 3 ? 'b' : 'f', side.x, side.y, pointerChannel());
+            return;
+        }
         if (event.button === 2) {
             var right = screenPoint(event, element, false);
             if (!right) return;
@@ -1859,8 +2145,31 @@
         sendPointer('d', point.x, point.y, pointerMode);
     }
 
+    function queuePointerMove(point) {
+        pointerLast = point;
+        pointerPending = point;
+        if (pointerFrame) return;
+        pointerFrame = requestAnimationFrame(function () {
+            pointerFrame = 0;
+            var pending = pointerPending;
+            pointerPending = null;
+            if (!pending) return;
+            if (!pointerActive && !screenPointerVisible) return;
+            sendPointer('m', pending.x, pending.y, pointerMode);
+        });
+    }
+
     function screenPointerMove(event, element) {
-        if (!pointerActive) return;
+        if (screenLocked) return;
+        noteScreenActivity();
+        if (!pointerActive) {
+            if (!screenPointerVisible) return;
+            var hover = screenPoint(event, element, true);
+            if (!hover) return;
+            pointerMode = pointerChannel();
+            queuePointerMove(hover);
+            return;
+        }
         if (!pointerMoved) {
             var dx = event.clientX - pointerOrigin.x;
             var dy = event.clientY - pointerOrigin.y;
@@ -1869,19 +2178,12 @@
         }
         var point = screenPoint(event, element, true);
         if (!point) return;
-        pointerLast = point;
-        pointerPending = point;
-        if (pointerFrame) return;
-        pointerFrame = requestAnimationFrame(function () {
-            pointerFrame = 0;
-            var pending = pointerPending;
-            pointerPending = null;
-            if (!pointerActive || !pending) return;
-            sendPointer('m', pending.x, pending.y, pointerMode);
-        });
+        queuePointerMove(point);
     }
 
     function screenPointerUp(event, element) {
+        if (screenLocked) return;
+        noteScreenActivity();
         if (!pointerActive) return;
         pointerActive = false;
         pointerPending = null;
@@ -1898,6 +2200,7 @@
     }
 
     function screenPointerCancel(event, element) {
+        if (screenLocked) return;
         if (!pointerActive) return;
         pointerActive = false;
         pointerPending = null;
@@ -1909,6 +2212,19 @@
         if (element.releasePointerCapture) {
             try { element.releasePointerCapture(event.pointerId); } catch (e) { }
         }
+    }
+
+    function screenWheel(event, element) {
+        if (!screenInfo || screenLocked) return;
+        var point = screenPoint(event, element, true);
+        if (!point) return;
+        event.preventDefault();
+        var unit = event.deltaMode === 1 ? 40 : (event.deltaMode === 2 ? 800 : 1);
+        var delta = Math.round(-event.deltaY * unit);
+        if (!delta) return;
+        delta = Math.max(-1200, Math.min(1200, delta));
+        sendPointer('w', point.x, point.y, pointerChannel(), delta);
+        noteScreenActivity();
     }
 
     var keyVkMap = {
@@ -1923,7 +2239,9 @@
         AltLeft: 0x12, AltRight: 0x12, MetaLeft: 0x5B, MetaRight: 0x5C,
         CapsLock: 0x14, NumLock: 0x90, ScrollLock: 0x91, PrintScreen: 0x2C, Pause: 0x13,
         ContextMenu: 0x5D, NumpadMultiply: 0x6A, NumpadAdd: 0x6B, NumpadSubtract: 0x6D,
-        NumpadDecimal: 0x6E, NumpadDivide: 0x6F
+        NumpadDecimal: 0x6E, NumpadDivide: 0x6F, NumpadComma: 0x6C, NumpadEqual: 0x92,
+        MediaTrackNext: 0xB0, MediaTrackPrevious: 0xB1, MediaStop: 0xB2, MediaPlayPause: 0xB3,
+        AudioVolumeMute: 0xAD, AudioVolumeDown: 0xAE, AudioVolumeUp: 0xAF
     };
 
     var keyNameVkMap = {
@@ -1932,7 +2250,10 @@
         ArrowLeft: 0x25, ArrowUp: 0x26, ArrowRight: 0x27, ArrowDown: 0x28,
         Shift: 0x10, Control: 0x11, Alt: 0x12, Meta: 0x5B,
         CapsLock: 0x14, NumLock: 0x90, ScrollLock: 0x91, PrintScreen: 0x2C, Pause: 0x13,
-        ContextMenu: 0x5D, ' ': 0x20
+        ContextMenu: 0x5D, ' ': 0x20,
+        AudioVolumeMute: 0xAD, AudioVolumeDown: 0xAE, AudioVolumeUp: 0xAF,
+        MediaPlayPause: 0xB3, MediaStop: 0xB2,
+        MediaTrackNext: 0xB0, MediaTrackPrevious: 0xB1
     };
 
     var pressedKeys = {};
@@ -1943,7 +2264,10 @@
         if ((match = /^Key([A-Z])$/.exec(code))) return 65 + match[1].charCodeAt(0) - 65;
         if ((match = /^Digit([0-9])$/.exec(code))) return 48 + parseInt(match[1], 10);
         if ((match = /^Numpad([0-9])$/.exec(code))) return 96 + parseInt(match[1], 10);
-        if ((match = /^F([1-9]|1[0-2])$/.exec(code))) return 111 + parseInt(match[1], 10);
+        if ((match = /^F(\d{1,2})$/.exec(code))) {
+            var fn = parseInt(match[1], 10);
+            if (fn >= 1 && fn <= 24) return 111 + fn;
+        }
         if (keyVkMap[code]) return keyVkMap[code];
         if (keyNameVkMap[event.key]) return keyNameVkMap[event.key];
         return 0;
@@ -1980,6 +2304,7 @@
 
     function screenKeyDown(event) {
         if (!screenKeyboardActive() || screenTyping(event) || screenKeyHelpOpen()) return;
+        if (screenLocked) return;
         var vk = keyToVk(event);
         if (!vk) return;
         event.preventDefault();
@@ -1988,10 +2313,12 @@
         if (pressedKeys[vk] != null) return;
         pressedKeys[vk] = pointerChannel();
         sendKey(vk, true, pressedKeys[vk]);
+        noteScreenActivity();
     }
 
     function screenKeyUp(event) {
         if (!screenKeyboardActive()) return;
+        if (screenLocked) return;
         var vk = keyToVk(event);
         if (!vk) return;
         event.preventDefault();
@@ -2232,6 +2559,8 @@
 
         var card = document.createElement('div');
         card.className = 'roster-card' + (uploaded ? ' uploaded' : '');
+        var tip = item.first ? (count > 1 ? item.first + ' 等…' : item.first) : folderPath;
+        card.title = tip;
 
         var icon = document.createElement('i');
         icon.className = 'bi ' + (uploaded ? 'bi-folder2-open' : 'bi-folder2');
@@ -2241,7 +2570,7 @@
         var nameEl = document.createElement('div');
         nameEl.className = 'roster-name';
         nameEl.textContent = item.name;
-        nameEl.title = folderPath;
+        nameEl.title = tip;
         main.appendChild(nameEl);
         if (uploaded) {
             var meta = document.createElement('div');
@@ -3583,10 +3912,62 @@
 
         $('btnScreen').addEventListener('click', function () { openScreen(); });
         $('screenElevateBtn').addEventListener('click', function () { requestScreenElevate(); });
+        $('screenPointerToggle').addEventListener('click', function () {
+            setScreenPointerVisible(!screenPointerVisible);
+        });
+        $('screenRefresh').addEventListener('click', function () { refreshScreen(); });
+        $('infoDiffQuality').addEventListener('change', function () {
+            var value = parseInt(this.value, 10) || 0;
+            saveScreenOptions('diff', '清晰度 ' + (value > 0 ? value : '原生'));
+        });
+        $('infoRtcQuality').addEventListener('change', function () {
+            var value = parseInt(this.value, 10) || 0;
+            saveScreenOptions('rtc', '清晰度 ' + (value > 0 ? value : '原生'));
+        });
+        $('infoRtcBitrate').addEventListener('change', function () {
+            var value = parseInt(this.value, 10) || 32;
+            saveScreenOptions('rtc', '码率 ' + value + ' Mbps');
+        });
+        $('infoQuality').addEventListener('change', function () {
+            var quality = parseInt(this.value, 10) || 40;
+            postJson('/api/screen/quality', { quality: quality }).then(function (res) {
+                var applied = res && res.quality ? res.quality : quality;
+                $('infoQuality').value = String(applied);
+                toast('画质 ' + applied);
+            }).catch(function (err) {
+                toast(err.message || '画质切换失败');
+            });
+        });
+        $('screenUnlock').addEventListener('click', function (event) {
+            event.stopPropagation();
+            unlockScreenControl();
+        });
+        $('screenLock').addEventListener('click', function () {
+            var button = $('screenUnlock');
+            if (!button) return;
+            button.classList.remove('nudge');
+            void button.offsetWidth;
+            button.classList.add('nudge');
+        });
+        $('screenUnlock').addEventListener('animationend', function () {
+            this.classList.remove('nudge');
+        });
+        $('screenSysKeyMenu').addEventListener('click', function (event) {
+            var item = event.target.closest ? event.target.closest('[data-winkey]') : null;
+            if (!item) return;
+            event.preventDefault();
+            if (screenLocked || !screenInfo) return;
+            sendPointer('s', parseInt(item.getAttribute('data-winkey'), 10), 0, pointerChannel());
+            noteScreenActivity();
+        });
+        $('screenModal').addEventListener('shown.bs.modal', function () {
+            noteScreenActivity();
+        });
         $('screenSelect').addEventListener('change', function () {
             selectScreen(parseInt(this.value, 10));
         });
         updateTransportLabel();
+        updatePointerToggle();
         $('screenTransportMenu').addEventListener('click', function (event) {
             var item = event.target.closest ? event.target.closest('.dropdown-item[data-transport]') : null;
             if (!item) return;
@@ -3623,6 +4004,18 @@
                 element.addEventListener('pointercancel', function (event) {
                     screenPointerCancel(event, element);
                 });
+                element.addEventListener('wheel', function (event) {
+                    screenWheel(event, element);
+                }, { passive: false });
+                element.addEventListener('mousedown', function (event) {
+                    if (event.button === 3 || event.button === 4) event.preventDefault();
+                });
+                element.addEventListener('mouseup', function (event) {
+                    if (event.button === 3 || event.button === 4) event.preventDefault();
+                });
+                element.addEventListener('auxclick', function (event) {
+                    if (event.button === 3 || event.button === 4) event.preventDefault();
+                });
                 element.addEventListener('contextmenu', function (event) {
                     event.preventDefault();
                 });
@@ -3631,6 +4024,11 @@
         document.addEventListener('keydown', screenKeyDown, true);
         document.addEventListener('keyup', screenKeyUp, true);
         window.addEventListener('blur', function () { releaseKeys(); });
+        window.addEventListener('resize', function () {
+            if (!screenInfo || screenMinimized) return;
+            if (!$('screenModal').classList.contains('show')) return;
+            fitScreenDialog();
+        });
         document.addEventListener('visibilitychange', function () {
             if (document.hidden) releaseKeys();
         });
@@ -3647,6 +4045,9 @@
         });
         $('screenVideo').addEventListener('playing', function () {
             if (screenTransport === 'rtc') endScreenLoading();
+        });
+        $('screenModal').addEventListener('click', function (event) {
+            if (event.target === this) minimizeScreen();
         });
         $('screenModal').addEventListener('hidden.bs.modal', function () {
             if (!screenMinimized) closeScreen();

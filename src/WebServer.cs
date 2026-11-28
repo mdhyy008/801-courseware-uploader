@@ -333,6 +333,28 @@ namespace _801CoursewareUploader
                 HandleScreenElevate(context);
                 return;
             }
+            if (string.Equals(path, "/api/screen/quality", StringComparison.OrdinalIgnoreCase) &&
+                (method == "GET" || method == "POST"))
+            {
+                if (!ScreenEnabled)
+                {
+                    WriteJson(context, 403, new { error = "屏幕控制已关闭" });
+                    return;
+                }
+                HandleScreenQuality(context);
+                return;
+            }
+            if (string.Equals(path, "/api/screen/options", StringComparison.OrdinalIgnoreCase) &&
+                (method == "GET" || method == "POST"))
+            {
+                if (!ScreenEnabled)
+                {
+                    WriteJson(context, 403, new { error = "屏幕控制已关闭" });
+                    return;
+                }
+                HandleScreenOptions(context);
+                return;
+            }
             if (string.Equals(path, "/api/screen/stats", StringComparison.OrdinalIgnoreCase) && method == "GET")
             {
                 if (!ScreenEnabled)
@@ -792,6 +814,7 @@ namespace _801CoursewareUploader
                     stats.Add(new
                     {
                         name = view.Name,
+                        first = view.FirstFile == null ? "" : view.FirstFile,
                         count = view.Count,
                         folders = view.FolderCount,
                         bytes = view.Bytes,
@@ -1417,7 +1440,44 @@ namespace _801CoursewareUploader
             {
                 primary = primary,
                 elevated = Native.IsElevated,
+                quality = ScreenControl.JpegQuality,
+                diffWidth = ScreenControl.DiffWidth,
+                rtcWidth = ScreenControl.RtcWidth,
+                rtcBitrate = ScreenControl.RtcBitrate,
                 screens = list
+            });
+        }
+
+        private void HandleScreenQuality(HttpListenerContext context)
+        {
+            if (string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+            {
+                ScreenQualityRequest request = ParseJson<ScreenQualityRequest>(context.Request);
+                if (request != null && request.Quality > 0)
+                {
+                    ScreenControl.JpegQuality = request.Quality;
+                }
+            }
+            WriteJson(context, 200, new { quality = ScreenControl.JpegQuality });
+        }
+
+        private void HandleScreenOptions(HttpListenerContext context)
+        {
+            if (string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+            {
+                ScreenOptionsRequest request = ParseJson<ScreenOptionsRequest>(context.Request);
+                if (request != null)
+                {
+                    if (request.DiffWidth >= 0) ScreenControl.DiffWidth = request.DiffWidth;
+                    if (request.RtcWidth >= 0) ScreenControl.RtcWidth = request.RtcWidth;
+                    if (request.RtcBitrate > 0) ScreenControl.RtcBitrate = request.RtcBitrate;
+                }
+            }
+            WriteJson(context, 200, new
+            {
+                diffWidth = ScreenControl.DiffWidth,
+                rtcWidth = ScreenControl.RtcWidth,
+                rtcBitrate = ScreenControl.RtcBitrate
             });
         }
 
@@ -1592,6 +1652,7 @@ namespace _801CoursewareUploader
                 WriteJson(context, 404, new { error = "没有可用的显示器" });
                 return;
             }
+            bool compress = string.Equals(Query(context, "z"), "1", StringComparison.Ordinal);
             WebSocket socket;
             try
             {
@@ -1603,7 +1664,7 @@ namespace _801CoursewareUploader
             }
             try
             {
-                StreamScreenTiles(socket, index);
+                StreamScreenTiles(socket, index, compress);
             }
             catch
             {
@@ -1641,10 +1702,21 @@ namespace _801CoursewareUploader
             buffer[offset + 1] = (byte)((value >> 8) & 0xFF);
         }
 
-        private void StreamScreenTiles(WebSocket socket, int index)
+        private static int CompressPayload(byte[] source, int offset, int count, MemoryStream target)
+        {
+            target.SetLength(0);
+            using (DeflateStream deflate = new DeflateStream(target, CompressionLevel.Fastest, true))
+            {
+                deflate.Write(source, offset, count);
+            }
+            return (int)target.Length;
+        }
+
+        private void StreamScreenTiles(WebSocket socket, int index, bool compress)
         {
             const int TileSize = 32;
-            Size size = ScreenControl.FrameSizeOf(index);
+            int preset = ScreenControl.DiffWidth;
+            Size size = ScreenControl.FrameSizeOf(index, preset);
             if (size.Width <= 0 || size.Height <= 0) return;
             int width = size.Width;
             int height = size.Height;
@@ -1656,6 +1728,7 @@ namespace _801CoursewareUploader
             byte[] output = new byte[width * height * 4 + 8 + tileCount * 4];
             GCHandle currentHandle = GCHandle.Alloc(current, GCHandleType.Pinned);
             GCHandle previousHandle = default(GCHandle);
+            MemoryStream compressedStream = compress ? new MemoryStream(64 * 1024) : null;
             Task<bool> closed = WatchSocketClose(socket);
             try
             {
@@ -1663,7 +1736,7 @@ namespace _801CoursewareUploader
                 {
                     int frameWidth;
                     int frameHeight;
-                    if (!ScreenControl.CaptureInto(index, current, out frameWidth, out frameHeight)) break;
+                    if (!ScreenControl.CaptureInto(index, current, preset, out frameWidth, out frameHeight)) break;
                     if (frameWidth != width || frameHeight != height) break;
 
                     int start = Environment.TickCount;
@@ -1728,9 +1801,20 @@ namespace _801CoursewareUploader
                         WriteU16(output, 2, width);
                         WriteU16(output, 4, height);
                         WriteU16(output, 6, dirty);
-                        socket.SendAsync(new ArraySegment<byte>(output, 0, used),
+                        int length = used;
+                        if (compress && used - 8 > 128)
+                        {
+                            int packed = CompressPayload(output, 8, used - 8, compressedStream);
+                            if (packed > 0 && packed + 8 < used - 32)
+                            {
+                                output[0] = 2;
+                                Buffer.BlockCopy(compressedStream.GetBuffer(), 0, output, 8, packed);
+                                length = 8 + packed;
+                            }
+                        }
+                        socket.SendAsync(new ArraySegment<byte>(output, 0, length),
                             WebSocketMessageType.Binary, true, CancellationToken.None).GetAwaiter().GetResult();
-                        RecordScreenBytes("diff", index, used, 1);
+                        RecordScreenBytes("diff", index, length, 1);
 
                         if (previous == null)
                         {
@@ -1741,7 +1825,7 @@ namespace _801CoursewareUploader
                     }
 
                     int spent = unchecked(Environment.TickCount - start);
-                    int wait = (heavy ? 100 : 20) - spent;
+                    int wait = (heavy ? 50 : 20) - spent;
                     if (wait > 0) Thread.Sleep(wait);
                 }
             }
@@ -1749,6 +1833,7 @@ namespace _801CoursewareUploader
             {
                 if (previousHandle.IsAllocated) previousHandle.Free();
                 currentHandle.Free();
+                if (compressedStream != null) compressedStream.Dispose();
             }
         }
 
@@ -1772,11 +1857,11 @@ namespace _801CoursewareUploader
                 WriteJson(context, 400, new { error = "请求无效" });
                 return;
             }
-            ApplyPointerCommand(request.Action, request.X, request.Y);
+            ApplyPointerCommand(request.Action, request.X, request.Y, request.Delta);
             WriteJson(context, 200, new { ok = true });
         }
 
-        private static void ApplyPointerCommand(string action, int x, int y)
+        private static void ApplyPointerCommand(string action, int x, int y, int delta)
         {
             switch (action)
             {
@@ -1785,6 +1870,10 @@ namespace _801CoursewareUploader
                 case "u": ScreenControl.PointerUp(x, y); break;
                 case "r": ScreenControl.RightClick(x, y); break;
                 case "c": ScreenControl.Click(x, y); break;
+                case "w": ScreenControl.Wheel(x, y, delta); break;
+                case "b": ScreenControl.XButton(x, y, 1); break;
+                case "f": ScreenControl.XButton(x, y, 2); break;
+                case "s": ScreenControl.WinCombo(x); break;
                 case "k":
                     if (y == 1) ScreenControl.KeyDown(x);
                     else ScreenControl.KeyUp(x);
@@ -1865,6 +1954,24 @@ namespace _801CoursewareUploader
                     else if (action == "c")
                     {
                         ScreenControl.Click(x, y);
+                    }
+                    else if (action == "w")
+                    {
+                        int delta;
+                        if (parts.Length >= 4 && int.TryParse(parts[3], out delta))
+                            ScreenControl.Wheel(x, y, delta);
+                    }
+                    else if (action == "b")
+                    {
+                        ScreenControl.XButton(x, y, 1);
+                    }
+                    else if (action == "f")
+                    {
+                        ScreenControl.XButton(x, y, 2);
+                    }
+                    else if (action == "s")
+                    {
+                        ScreenControl.WinCombo(x);
                     }
                     else if (action == "k")
                     {
@@ -2122,7 +2229,7 @@ namespace _801CoursewareUploader
         {
             while (session.Running && running)
             {
-                Size size = ScreenControl.FrameSizeOf(session.Index);
+                Size size = ScreenControl.FrameSizeOf(session.Index, ScreenControl.RtcWidth);
                 int width = size.Width & ~1;
                 int height = size.Height & ~1;
                 if (width <= 1 || height <= 1)
@@ -2145,7 +2252,10 @@ namespace _801CoursewareUploader
                     try { session.Encoder.Dispose(); } catch { }
                 }
                 Vp8Codec fresh = new Vp8Codec();
-                fresh.InitialiseEncoder((uint)width, (uint)height, 8000u);
+                long computed = (long)width * height * 4 / 1000;
+                long cap = ScreenControl.RtcBitrate * 1000L;
+                uint bitrate = (uint)Math.Max(8000L, Math.Min(cap, computed));
+                fresh.InitialiseEncoder((uint)width, (uint)height, bitrate);
                 TuneVp8(fresh);
                 session.Encoder = fresh;
                 session.ForceKey = true;
@@ -2163,8 +2273,16 @@ namespace _801CoursewareUploader
 
             Thread captureThread = new Thread(delegate()
             {
+                int lastCapture = 0;
                 while (session.Running && running)
                 {
+                    int now = Environment.TickCount;
+                    if (lastCapture != 0)
+                    {
+                        int delta = unchecked(now - lastCapture);
+                        if (delta < 33) Thread.Sleep(33 - delta);
+                    }
+                    lastCapture = Environment.TickCount;
                     Size current = ScreenControl.FrameSizeOf(session.Index, width);
                     if (current.Width != width || current.Height != height) break;
                     byte[] target;
@@ -2225,7 +2343,7 @@ namespace _801CoursewareUploader
                     if (frame == null) continue;
                     try
                     {
-                        bool key = session.ForceKey || (frames > 0 && frames % 150 == 0);
+                        bool key = session.ForceKey || (frames > 0 && frames % 300 == 0);
                         if (session.ForceKey) session.ForceKey = false;
                         ConvertBgraToI420(frame, i420, mapper);
                         byte[] encoded = session.Encoder.Encode(i420, VpxImgFmt.VPX_IMG_FMT_I420, key);
